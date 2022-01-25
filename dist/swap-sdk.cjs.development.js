@@ -368,7 +368,7 @@ function Currency(decimals, symbol, name) {
  * The only instance of the base class `Currency`.
  */
 
-Currency.ETHER = /*#__PURE__*/new Currency(18, 'BNB', "Binance");
+Currency.ETHER = /*#__PURE__*/new Currency(18, 'BNB', 'BNB');
 var ETHER = Currency.ETHER;
 
 var _WETH;
@@ -379,12 +379,13 @@ var _WETH;
 var Token = /*#__PURE__*/function (_Currency) {
   _inheritsLoose(Token, _Currency);
 
-  function Token(chainId, address, decimals, symbol, name) {
+  function Token(chainId, address, decimals, symbol, name, projectLink) {
     var _this;
 
     _this = _Currency.call(this, decimals, symbol, name) || this;
     _this.chainId = chainId;
     _this.address = validateAndParseAddress(address);
+    _this.projectLink = projectLink;
     return _this;
   }
   /**
@@ -757,7 +758,7 @@ var Pair = /*#__PURE__*/function () {
   function Pair(tokenAmountA, tokenAmountB) {
     var tokenAmounts = tokenAmountA.token.sortsBefore(tokenAmountB.token) // does safety checks
     ? [tokenAmountA, tokenAmountB] : [tokenAmountB, tokenAmountA];
-    this.liquidityToken = new Token(tokenAmounts[0].token.chainId, Pair.getAddress(tokenAmounts[0].token, tokenAmounts[1].token, tokenAmounts[0].token.chainId), 18, 'SBS', 'Pye-Swap');
+    this.liquidityToken = new Token(tokenAmounts[0].token.chainId, Pair.getAddress(tokenAmounts[0].token, tokenAmounts[1].token, tokenAmounts[0].token.chainId), 18, 'SFG', 'Safegram-Swap');
     this.tokenAmounts = tokenAmounts;
   }
 
@@ -1144,7 +1145,6 @@ var Trade = /*#__PURE__*/function () {
     this.outputAmount = tradeType === exports.TradeType.EXACT_OUTPUT ? amount : route.output === ETHER ? CurrencyAmount.ether(amounts[amounts.length - 1].raw) : amounts[amounts.length - 1];
     this.executionPrice = new Price(this.inputAmount.currency, this.outputAmount.currency, this.inputAmount.raw, this.outputAmount.raw);
     this.nextMidPrice = Price.fromRoute(new Route(nextPairs, route.input));
-    console.log(route.midPrice.toSignificant(6), this.inputAmount.toSignificant(6), this.outputAmount.toSignificant(6));
     this.priceImpact = computePriceImpact(route.midPrice, this.inputAmount, this.outputAmount);
   }
   /**
@@ -1237,34 +1237,19 @@ var Trade = /*#__PURE__*/function () {
       bestTrades = [];
     }
 
-    console.log(pairs, currencyAmountIn, currencyOut, {
-      maxNumResults: maxNumResults,
-      maxHops: maxHops
-    }, currentPairs, originalAmountIn, bestTrades);
     !(pairs.length > 0) ?  invariant(false, 'PAIRS')  : void 0;
     !(maxHops > 0) ?  invariant(false, 'MAX_HOPS')  : void 0;
     !(originalAmountIn === currencyAmountIn || currentPairs.length > 0) ?  invariant(false, 'INVALID_RECURSION')  : void 0;
     var chainId = currencyAmountIn instanceof TokenAmount ? currencyAmountIn.token.chainId : currencyOut instanceof Token ? currencyOut.chainId : undefined;
-    console.log(chainId);
     !(chainId !== undefined) ?  invariant(false, 'CHAIN_ID')  : void 0;
     var amountIn = wrappedAmount(currencyAmountIn, chainId);
     var tokenOut = wrappedCurrency(currencyOut, chainId);
-    console.log(amountIn, tokenOut);
 
     for (var i = 0; i < pairs.length; i++) {
-      var pair = pairs[i];
-      console.log(pair); // pair irrelevant
+      var pair = pairs[i]; // pair irrelevant
 
-      if (!pair.token0.equals(amountIn.token) && !pair.token1.equals(amountIn.token)) {
-        console.log('irrelevant pair');
-        continue;
-      }
-
-      if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) {
-        console.log('zero reserve');
-        continue;
-      }
-
+      if (!pair.token0.equals(amountIn.token) && !pair.token1.equals(amountIn.token)) continue;
+      if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) continue;
       var amountOut = void 0;
 
       try {
@@ -1273,11 +1258,9 @@ var Trade = /*#__PURE__*/function () {
         var _pair$getOutputAmount2 = pair.getOutputAmount(amountIn);
 
         amountOut = _pair$getOutputAmount2[0];
-        console.log(amountOut);
       } catch (error) {
         // input too low
         if (error.isInsufficientInputAmountError) {
-          console.log('error on fetching amountOut');
           continue;
         }
 
@@ -1286,7 +1269,6 @@ var Trade = /*#__PURE__*/function () {
 
 
       if (amountOut.token.equals(tokenOut)) {
-        console.log('find a route');
         sortedInsert(bestTrades, new Trade(new Route([].concat(currentPairs, [pair]), originalAmountIn.currency, currencyOut), originalAmountIn, exports.TradeType.EXACT_INPUT), maxNumResults, tradeComparator);
       } else if (maxHops > 1 && pairs.length > 1) {
         var pairsExcludingThisPair = pairs.slice(0, i).concat(pairs.slice(i + 1, pairs.length)); // otherwise, consider all the other paths that lead from this token as long as we have not exceeded maxHops

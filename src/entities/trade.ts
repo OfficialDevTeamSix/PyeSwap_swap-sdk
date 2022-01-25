@@ -180,14 +180,14 @@ export class Trade {
       tradeType === TradeType.EXACT_INPUT
         ? amount
         : route.input === ETHER
-        ? CurrencyAmount.ether(amounts[0].raw)
-        : amounts[0]
+          ? CurrencyAmount.ether(amounts[0].raw)
+          : amounts[0]
     this.outputAmount =
       tradeType === TradeType.EXACT_OUTPUT
         ? amount
         : route.output === ETHER
-        ? CurrencyAmount.ether(amounts[amounts.length - 1].raw)
-        : amounts[amounts.length - 1]
+          ? CurrencyAmount.ether(amounts[amounts.length - 1].raw)
+          : amounts[amounts.length - 1]
     this.executionPrice = new Price(
       this.inputAmount.currency,
       this.outputAmount.currency,
@@ -195,7 +195,6 @@ export class Trade {
       this.outputAmount.raw
     )
     this.nextMidPrice = Price.fromRoute(new Route(nextPairs, route.input))
-    console.log(route.midPrice.toSignificant(6), this.inputAmount.toSignificant(6), this.outputAmount.toSignificant(6));
     this.priceImpact = computePriceImpact(route.midPrice, this.inputAmount, this.outputAmount)
   }
 
@@ -258,15 +257,6 @@ export class Trade {
     originalAmountIn: CurrencyAmount = currencyAmountIn,
     bestTrades: Trade[] = []
   ): Trade[] {
-    console.log(
-        pairs,
-        currencyAmountIn,
-        currencyOut,
-        { maxNumResults, maxHops },
-        currentPairs,
-        originalAmountIn,
-        bestTrades
-    )
     invariant(pairs.length > 0, 'PAIRS')
     invariant(maxHops > 0, 'MAX_HOPS')
     invariant(originalAmountIn === currencyAmountIn || currentPairs.length > 0, 'INVALID_RECURSION')
@@ -274,42 +264,30 @@ export class Trade {
       currencyAmountIn instanceof TokenAmount
         ? currencyAmountIn.token.chainId
         : currencyOut instanceof Token
-        ? currencyOut.chainId
-        : undefined
-    console.log(chainId)
+          ? currencyOut.chainId
+          : undefined
     invariant(chainId !== undefined, 'CHAIN_ID')
 
     const amountIn = wrappedAmount(currencyAmountIn, chainId)
     const tokenOut = wrappedCurrency(currencyOut, chainId)
-    console.log(amountIn, tokenOut)
     for (let i = 0; i < pairs.length; i++) {
       const pair = pairs[i]
-      console.log(pair);
       // pair irrelevant
-      if (!pair.token0.equals(amountIn.token) && !pair.token1.equals(amountIn.token)) {
-        console.log('irrelevant pair')
-        continue
-      }
-      if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) {
-        console.log('zero reserve')
-        continue
-      }
+      if (!pair.token0.equals(amountIn.token) && !pair.token1.equals(amountIn.token)) continue
+      if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) continue
 
       let amountOut: TokenAmount
       try {
         ;[amountOut] = pair.getOutputAmount(amountIn)
-        console.log(amountOut);
       } catch (error) {
         // input too low
         if (error.isInsufficientInputAmountError) {
-          console.log('error on fetching amountOut');
           continue
         }
         throw error
       }
       // we have arrived at the output token, so this is the final trade of one of the paths
       if (amountOut.token.equals(tokenOut)) {
-        console.log('find a route')
         sortedInsert(
           bestTrades,
           new Trade(
@@ -374,8 +352,8 @@ export class Trade {
       currencyAmountOut instanceof TokenAmount
         ? currencyAmountOut.token.chainId
         : currencyIn instanceof Token
-        ? currencyIn.chainId
-        : undefined
+          ? currencyIn.chainId
+          : undefined
     invariant(chainId !== undefined, 'CHAIN_ID')
 
     const amountOut = wrappedAmount(currencyAmountOut, chainId)

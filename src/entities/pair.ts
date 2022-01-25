@@ -1,9 +1,9 @@
-import {Price} from './fractions/price'
-import {TokenAmount} from './fractions/tokenAmount'
+import { Price } from './fractions/price'
+import { TokenAmount } from './fractions/tokenAmount'
 import invariant from 'tiny-invariant'
 import JSBI from 'jsbi'
-import {keccak256, pack} from '@ethersproject/solidity'
-import {getCreate2Address} from '@ethersproject/address'
+import { pack, keccak256 } from '@ethersproject/solidity'
+import { getCreate2Address } from '@ethersproject/address'
 
 import {
   _10000,
@@ -14,12 +14,12 @@ import {
   FIVE,
   INIT_CODE_HASH,
   MINIMUM_LIQUIDITY,
-  ONE,
-  ZERO
+  ZERO,
+  ONE
 } from '../constants'
-import {parseBigintIsh, sqrt} from '../utils'
-import {InsufficientInputAmountError, InsufficientReservesError} from '../errors'
-import {Token} from './token'
+import { sqrt, parseBigintIsh } from '../utils'
+import { InsufficientReservesError, InsufficientInputAmountError } from '../errors'
+import { Token } from './token'
 
 let PAIR_ADDRESS_CACHE: { [token0Address: string]: { [token1Address: string]: string } } = {}
 
@@ -56,8 +56,8 @@ export class Pair {
       tokenAmounts[0].token.chainId,
       Pair.getAddress(tokenAmounts[0].token, tokenAmounts[1].token, tokenAmounts[0].token.chainId),
       18,
-      'SBS',
-      'Pye-Swap'
+      'SFG',
+      'Safegram-Swap'
     )
     this.tokenAmounts = tokenAmounts as [TokenAmount, TokenAmount]
   }
