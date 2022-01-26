@@ -26,8 +26,10 @@ export declare const THREE: JSBI;
 export declare const FIVE: JSBI;
 export declare const TEN: JSBI;
 export declare const _100: JSBI;
-export declare const _9950: JSBI;
+export declare const _9975: JSBI;
+export declare const _8575: JSBI;
 export declare const _10000: JSBI;
+export declare const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 export declare enum SolidityType {
     uint8 = "uint8",
     uint256 = "uint256"

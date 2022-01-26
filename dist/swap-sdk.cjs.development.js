@@ -45,8 +45,10 @@ var THREE = /*#__PURE__*/JSBI.BigInt(3);
 var FIVE = /*#__PURE__*/JSBI.BigInt(5);
 var TEN = /*#__PURE__*/JSBI.BigInt(10);
 var _100 = /*#__PURE__*/JSBI.BigInt(100);
-var _9950 = /*#__PURE__*/JSBI.BigInt(9950);
+var _9975 = /*#__PURE__*/JSBI.BigInt(9975);
+var _8575 = /*#__PURE__*/JSBI.BigInt(8575);
 var _10000 = /*#__PURE__*/JSBI.BigInt(10000);
+var ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 var SolidityType;
 
 (function (SolidityType) {
@@ -755,10 +757,15 @@ var Price = /*#__PURE__*/function (_Fraction) {
 
 var PAIR_ADDRESS_CACHE = {};
 var Pair = /*#__PURE__*/function () {
-  function Pair(tokenAmountA, tokenAmountB) {
+  function Pair(tokenAmountA, tokenAmountB, baseToken) {
+    if (baseToken === void 0) {
+      baseToken = tokenAmountB.token.address;
+    }
+
     var tokenAmounts = tokenAmountA.token.sortsBefore(tokenAmountB.token) // does safety checks
     ? [tokenAmountA, tokenAmountB] : [tokenAmountB, tokenAmountA];
-    this.liquidityToken = new Token(tokenAmounts[0].token.chainId, Pair.getAddress(tokenAmounts[0].token, tokenAmounts[1].token, tokenAmounts[0].token.chainId), 18, 'SFG', 'Safegram-Swap');
+    this.liquidityToken = new Token(tokenAmounts[0].token.chainId, Pair.getAddress(tokenAmounts[0].token, tokenAmounts[1].token, tokenAmounts[0].token.chainId), 18, 'PYE-LP', 'PYESwap-LP');
+    this.baseToken = baseToken;
     this.tokenAmounts = tokenAmounts;
   }
 
@@ -821,9 +828,10 @@ var Pair = /*#__PURE__*/function () {
       throw new InsufficientReservesError();
     }
 
+    var fee = this.baseToken === ZERO_ADDRESS ? _9975 : _8575;
     var inputReserve = this.reserveOf(inputAmount.token);
     var outputReserve = this.reserveOf(inputAmount.token.equals(this.token0) ? this.token1 : this.token0);
-    var inputAmountWithFee = JSBI.multiply(inputAmount.raw, _9950);
+    var inputAmountWithFee = JSBI.multiply(inputAmount.raw, fee);
     var numerator = JSBI.multiply(inputAmountWithFee, outputReserve.raw);
     var denominator = JSBI.add(JSBI.multiply(inputReserve.raw, _10000), inputAmountWithFee);
     var outputAmount = new TokenAmount(inputAmount.token.equals(this.token0) ? this.token1 : this.token0, JSBI.divide(numerator, denominator));
@@ -832,7 +840,7 @@ var Pair = /*#__PURE__*/function () {
       throw new InsufficientInputAmountError();
     }
 
-    return [outputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount))];
+    return [outputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount), this.baseToken)];
   };
 
   _proto.getInputAmount = function getInputAmount(outputAmount) {
@@ -842,12 +850,13 @@ var Pair = /*#__PURE__*/function () {
       throw new InsufficientReservesError();
     }
 
+    var fee = this.baseToken === ZERO_ADDRESS ? _9975 : _8575;
     var outputReserve = this.reserveOf(outputAmount.token);
     var inputReserve = this.reserveOf(outputAmount.token.equals(this.token0) ? this.token1 : this.token0);
     var numerator = JSBI.multiply(JSBI.multiply(inputReserve.raw, outputAmount.raw), _10000);
-    var denominator = JSBI.multiply(JSBI.subtract(outputReserve.raw, outputAmount.raw), _9950);
+    var denominator = JSBI.multiply(JSBI.subtract(outputReserve.raw, outputAmount.raw), fee);
     var inputAmount = new TokenAmount(outputAmount.token.equals(this.token0) ? this.token1 : this.token0, JSBI.add(JSBI.divide(numerator, denominator), ONE));
-    return [inputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount))];
+    return [inputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount), this.baseToken)];
   };
 
   _proto.getLiquidityMinted = function getLiquidityMinted(totalSupply, tokenAmountA, tokenAmountB) {
@@ -1461,7 +1470,7 @@ var Router = /*#__PURE__*/function () {
   return Router;
 }();
 
-var contractName = "IPyeSwapPair";
+var contractName = "IPYESwapPair";
 var abi = [
 	{
 		anonymous: false,
@@ -1630,6 +1639,22 @@ var abi = [
 		],
 		name: "Transfer",
 		type: "event"
+	},
+	{
+		constant: true,
+		inputs: [
+		],
+		name: "baseToken",
+		outputs: [
+			{
+				internalType: "address",
+				name: "",
+				type: "address"
+			}
+		],
+		payable: false,
+		stateMutability: "view",
+		type: "function"
 	},
 	{
 		constant: true,
@@ -2123,6 +2148,16 @@ var abi = [
 				type: "uint256"
 			},
 			{
+				internalType: "uint256",
+				name: "amount0Fee",
+				type: "uint256"
+			},
+			{
+				internalType: "uint256",
+				name: "amount1Fee",
+				type: "uint256"
+			},
+			{
 				internalType: "address",
 				name: "to",
 				type: "address"
@@ -2187,24 +2222,43 @@ var abi = [
 		payable: false,
 		stateMutability: "nonpayable",
 		type: "function"
+	},
+	{
+		constant: false,
+		inputs: [
+			{
+				internalType: "address",
+				name: "_baseToken",
+				type: "address"
+			}
+		],
+		name: "setBaseToken",
+		outputs: [
+		],
+		payable: false,
+		stateMutability: "nonpayable",
+		type: "function"
 	}
 ];
+var metadata = "{\"compiler\":{\"version\":\"0.5.16+commit.9c3226ce\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"Approval\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"sender\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount0\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount1\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"}],\"name\":\"Burn\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"sender\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount0\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount1\",\"type\":\"uint256\"}],\"name\":\"Mint\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"sender\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount0In\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount1In\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount0Out\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount1Out\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"}],\"name\":\"Swap\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint112\",\"name\":\"reserve0\",\"type\":\"uint112\"},{\"indexed\":false,\"internalType\":\"uint112\",\"name\":\"reserve1\",\"type\":\"uint112\"}],\"name\":\"Sync\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"from\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"Transfer\",\"type\":\"event\"},{\"constant\":true,\"inputs\":[],\"name\":\"DOMAIN_SEPARATOR\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"MINIMUM_LIQUIDITY\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"PERMIT_TYPEHASH\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"}],\"name\":\"allowance\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"approve\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"balanceOf\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"baseToken\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"}],\"name\":\"burn\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"amount0\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"amount1\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"decimals\",\"outputs\":[{\"internalType\":\"uint8\",\"name\":\"\",\"type\":\"uint8\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"factory\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"getReserves\",\"outputs\":[{\"internalType\":\"uint112\",\"name\":\"reserve0\",\"type\":\"uint112\"},{\"internalType\":\"uint112\",\"name\":\"reserve1\",\"type\":\"uint112\"},{\"internalType\":\"uint32\",\"name\":\"blockTimestampLast\",\"type\":\"uint32\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"initialize\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"kLast\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"}],\"name\":\"mint\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"liquidity\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"name\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"nonces\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"spender\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"deadline\",\"type\":\"uint256\"},{\"internalType\":\"uint8\",\"name\":\"v\",\"type\":\"uint8\"},{\"internalType\":\"bytes32\",\"name\":\"r\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"s\",\"type\":\"bytes32\"}],\"name\":\"permit\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"price0CumulativeLast\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"price1CumulativeLast\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"internalType\":\"address\",\"name\":\"_baseToken\",\"type\":\"address\"}],\"name\":\"setBaseToken\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"}],\"name\":\"skim\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"amount0Out\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"amount1Out\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"amount0Fee\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"amount1Fee\",\"type\":\"uint256\"},{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"data\",\"type\":\"bytes\"}],\"name\":\"swap\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"symbol\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"sync\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"token0\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"token1\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"totalSupply\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"transfer\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"internalType\":\"address\",\"name\":\"from\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"transferFrom\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"project:/contracts/interfaces/IPYESwapPair.sol\":\"IPYESwapPair\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"optimizer\":{\"enabled\":true,\"runs\":999999},\"remappings\":[]},\"sources\":{\"project:/contracts/interfaces/IPYESwapPair.sol\":{\"keccak256\":\"0x7291c9f40d679f5743766b9d6e40e3d7b0745b7bce75f3b2b626d77d742f740f\",\"urls\":[\"bzz-raw://8bb55644bee013780817469581b2b7428afea6a32c3f99b3e0f3e91a988dd53e\",\"dweb:/ipfs/QmQffemEice3YRmWAjEPkW4FDaawYAimryLL3RkmyG8yY7\"]}},\"version\":1}";
 var bytecode = "0x";
 var deployedBytecode = "0x";
 var sourceMap = "";
 var deployedSourceMap = "";
+var source = "pragma solidity >=0.5.0;\n\ninterface IPYESwapPair {\n    event Approval(address indexed owner, address indexed spender, uint value);\n    event Transfer(address indexed from, address indexed to, uint value);\n\n    function baseToken() external view returns (address);\n    function name() external pure returns (string memory);\n    function symbol() external pure returns (string memory);\n    function decimals() external pure returns (uint8);\n    function totalSupply() external view returns (uint);\n    function balanceOf(address owner) external view returns (uint);\n    function allowance(address owner, address spender) external view returns (uint);\n\n    function approve(address spender, uint value) external returns (bool);\n    function transfer(address to, uint value) external returns (bool);\n    function transferFrom(address from, address to, uint value) external returns (bool);\n\n    function DOMAIN_SEPARATOR() external view returns (bytes32);\n    function PERMIT_TYPEHASH() external pure returns (bytes32);\n    function nonces(address owner) external view returns (uint);\n\n    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external;\n\n    event Mint(address indexed sender, uint amount0, uint amount1);\n    event Burn(address indexed sender, uint amount0, uint amount1, address indexed to);\n    event Swap(\n        address indexed sender,\n        uint amount0In,\n        uint amount1In,\n        uint amount0Out,\n        uint amount1Out,\n        address indexed to\n    );\n    event Sync(uint112 reserve0, uint112 reserve1);\n\n    function MINIMUM_LIQUIDITY() external pure returns (uint);\n    function factory() external view returns (address);\n    function token0() external view returns (address);\n    function token1() external view returns (address);\n    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);\n    function price0CumulativeLast() external view returns (uint);\n    function price1CumulativeLast() external view returns (uint);\n    function kLast() external view returns (uint);\n\n    function mint(address to) external returns (uint liquidity);\n    function burn(address to) external returns (uint amount0, uint amount1);\n    function swap(uint amount0Out, uint amount1Out, uint amount0Fee, uint amount1Fee, address to, bytes calldata data) external;\n    function skim(address to) external;\n    function sync() external;\n\n    function initialize(address, address) external;\n    function setBaseToken(address _baseToken) external;\n}\n";
+var sourcePath = "G:\\projects\\pyeswap\\contracts\\compile\\swap-factory\\contracts\\interfaces\\IPYESwapPair.sol";
 var ast = {
-	absolutePath: "project:/contracts/interfaces/IPyeSwapPair.sol",
+	absolutePath: "project:/contracts/interfaces/IPYESwapPair.sol",
 	exportedSymbols: {
-		IPyeSwapPair: [
-			2189
+		IPYESwapPair: [
+			2332
 		]
 	},
-	id: 2190,
+	id: 2333,
 	nodeType: "SourceUnit",
 	nodes: [
 		{
-			id: 1949,
+			id: 2078,
 			literals: [
 				"solidity",
 				">=",
@@ -2212,7 +2266,7 @@ var ast = {
 				".0"
 			],
 			nodeType: "PragmaDirective",
-			src: "0:24:8"
+			src: "0:24:9"
 		},
 		{
 			baseContracts: [
@@ -2222,1586 +2276,31 @@ var ast = {
 			contractKind: "interface",
 			documentation: null,
 			fullyImplemented: false,
-			id: 2189,
+			id: 2332,
 			linearizedBaseContracts: [
-				2189
+				2332
 			],
-			name: "IPyeSwapPair",
+			name: "IPYESwapPair",
 			nodeType: "ContractDefinition",
 			nodes: [
 				{
 					anonymous: false,
 					documentation: null,
-					id: 1957,
+					id: 2086,
 					name: "Approval",
 					nodeType: "EventDefinition",
 					parameters: {
-						id: 1956,
+						id: 2085,
 						nodeType: "ParameterList",
 						parameters: [
-							{
-								constant: false,
-								id: 1951,
-								indexed: true,
-								name: "owner",
-								nodeType: "VariableDeclaration",
-								scope: 1957,
-								src: "71:21:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 1950,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "71:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 1953,
-								indexed: true,
-								name: "spender",
-								nodeType: "VariableDeclaration",
-								scope: 1957,
-								src: "94:23:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 1952,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "94:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 1955,
-								indexed: false,
-								name: "value",
-								nodeType: "VariableDeclaration",
-								scope: 1957,
-								src: "119:10:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 1954,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "119:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "70:60:8"
-					},
-					src: "56:75:8"
-				},
-				{
-					anonymous: false,
-					documentation: null,
-					id: 1965,
-					name: "Transfer",
-					nodeType: "EventDefinition",
-					parameters: {
-						id: 1964,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 1959,
-								indexed: true,
-								name: "from",
-								nodeType: "VariableDeclaration",
-								scope: 1965,
-								src: "151:20:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 1958,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "151:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 1961,
-								indexed: true,
-								name: "to",
-								nodeType: "VariableDeclaration",
-								scope: 1965,
-								src: "173:18:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 1960,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "173:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 1963,
-								indexed: false,
-								name: "value",
-								nodeType: "VariableDeclaration",
-								scope: 1965,
-								src: "193:10:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 1962,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "193:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "150:54:8"
-					},
-					src: "136:69:8"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 1970,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "name",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 1966,
-						nodeType: "ParameterList",
-						parameters: [
-						],
-						src: "224:2:8"
-					},
-					returnParameters: {
-						id: 1969,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 1968,
-								name: "",
-								nodeType: "VariableDeclaration",
-								scope: 1970,
-								src: "250:13:8",
-								stateVariable: false,
-								storageLocation: "memory",
-								typeDescriptions: {
-									typeIdentifier: "t_string_memory_ptr",
-									typeString: "string"
-								},
-								typeName: {
-									id: 1967,
-									name: "string",
-									nodeType: "ElementaryTypeName",
-									src: "250:6:8",
-									typeDescriptions: {
-										typeIdentifier: "t_string_storage_ptr",
-										typeString: "string"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "249:15:8"
-					},
-					scope: 2189,
-					src: "211:54:8",
-					stateMutability: "pure",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 1975,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "symbol",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 1971,
-						nodeType: "ParameterList",
-						parameters: [
-						],
-						src: "285:2:8"
-					},
-					returnParameters: {
-						id: 1974,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 1973,
-								name: "",
-								nodeType: "VariableDeclaration",
-								scope: 1975,
-								src: "311:13:8",
-								stateVariable: false,
-								storageLocation: "memory",
-								typeDescriptions: {
-									typeIdentifier: "t_string_memory_ptr",
-									typeString: "string"
-								},
-								typeName: {
-									id: 1972,
-									name: "string",
-									nodeType: "ElementaryTypeName",
-									src: "311:6:8",
-									typeDescriptions: {
-										typeIdentifier: "t_string_storage_ptr",
-										typeString: "string"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "310:15:8"
-					},
-					scope: 2189,
-					src: "270:56:8",
-					stateMutability: "pure",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 1980,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "decimals",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 1976,
-						nodeType: "ParameterList",
-						parameters: [
-						],
-						src: "348:2:8"
-					},
-					returnParameters: {
-						id: 1979,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 1978,
-								name: "",
-								nodeType: "VariableDeclaration",
-								scope: 1980,
-								src: "374:5:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint8",
-									typeString: "uint8"
-								},
-								typeName: {
-									id: 1977,
-									name: "uint8",
-									nodeType: "ElementaryTypeName",
-									src: "374:5:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint8",
-										typeString: "uint8"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "373:7:8"
-					},
-					scope: 2189,
-					src: "331:50:8",
-					stateMutability: "pure",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 1985,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "totalSupply",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 1981,
-						nodeType: "ParameterList",
-						parameters: [
-						],
-						src: "406:2:8"
-					},
-					returnParameters: {
-						id: 1984,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 1983,
-								name: "",
-								nodeType: "VariableDeclaration",
-								scope: 1985,
-								src: "432:4:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 1982,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "432:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "431:6:8"
-					},
-					scope: 2189,
-					src: "386:52:8",
-					stateMutability: "view",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 1992,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "balanceOf",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 1988,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 1987,
-								name: "owner",
-								nodeType: "VariableDeclaration",
-								scope: 1992,
-								src: "462:13:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 1986,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "462:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "461:15:8"
-					},
-					returnParameters: {
-						id: 1991,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 1990,
-								name: "",
-								nodeType: "VariableDeclaration",
-								scope: 1992,
-								src: "500:4:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 1989,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "500:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "499:6:8"
-					},
-					scope: 2189,
-					src: "443:63:8",
-					stateMutability: "view",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 2001,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "allowance",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 1997,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 1994,
-								name: "owner",
-								nodeType: "VariableDeclaration",
-								scope: 2001,
-								src: "530:13:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 1993,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "530:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 1996,
-								name: "spender",
-								nodeType: "VariableDeclaration",
-								scope: 2001,
-								src: "545:15:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 1995,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "545:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "529:32:8"
-					},
-					returnParameters: {
-						id: 2000,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 1999,
-								name: "",
-								nodeType: "VariableDeclaration",
-								scope: 2001,
-								src: "585:4:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 1998,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "585:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "584:6:8"
-					},
-					scope: 2189,
-					src: "511:80:8",
-					stateMutability: "view",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 2010,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "approve",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 2006,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2003,
-								name: "spender",
-								nodeType: "VariableDeclaration",
-								scope: 2010,
-								src: "614:15:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 2002,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "614:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2005,
-								name: "value",
-								nodeType: "VariableDeclaration",
-								scope: 2010,
-								src: "631:10:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2004,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "631:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "613:29:8"
-					},
-					returnParameters: {
-						id: 2009,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2008,
-								name: "",
-								nodeType: "VariableDeclaration",
-								scope: 2010,
-								src: "661:4:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_bool",
-									typeString: "bool"
-								},
-								typeName: {
-									id: 2007,
-									name: "bool",
-									nodeType: "ElementaryTypeName",
-									src: "661:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_bool",
-										typeString: "bool"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "660:6:8"
-					},
-					scope: 2189,
-					src: "597:70:8",
-					stateMutability: "nonpayable",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 2019,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "transfer",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 2015,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2012,
-								name: "to",
-								nodeType: "VariableDeclaration",
-								scope: 2019,
-								src: "690:10:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 2011,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "690:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2014,
-								name: "value",
-								nodeType: "VariableDeclaration",
-								scope: 2019,
-								src: "702:10:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2013,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "702:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "689:24:8"
-					},
-					returnParameters: {
-						id: 2018,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2017,
-								name: "",
-								nodeType: "VariableDeclaration",
-								scope: 2019,
-								src: "732:4:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_bool",
-									typeString: "bool"
-								},
-								typeName: {
-									id: 2016,
-									name: "bool",
-									nodeType: "ElementaryTypeName",
-									src: "732:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_bool",
-										typeString: "bool"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "731:6:8"
-					},
-					scope: 2189,
-					src: "672:66:8",
-					stateMutability: "nonpayable",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 2030,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "transferFrom",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 2026,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2021,
-								name: "from",
-								nodeType: "VariableDeclaration",
-								scope: 2030,
-								src: "765:12:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 2020,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "765:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2023,
-								name: "to",
-								nodeType: "VariableDeclaration",
-								scope: 2030,
-								src: "779:10:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 2022,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "779:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2025,
-								name: "value",
-								nodeType: "VariableDeclaration",
-								scope: 2030,
-								src: "791:10:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2024,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "791:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "764:38:8"
-					},
-					returnParameters: {
-						id: 2029,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2028,
-								name: "",
-								nodeType: "VariableDeclaration",
-								scope: 2030,
-								src: "821:4:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_bool",
-									typeString: "bool"
-								},
-								typeName: {
-									id: 2027,
-									name: "bool",
-									nodeType: "ElementaryTypeName",
-									src: "821:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_bool",
-										typeString: "bool"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "820:6:8"
-					},
-					scope: 2189,
-					src: "743:84:8",
-					stateMutability: "nonpayable",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 2035,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "DOMAIN_SEPARATOR",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 2031,
-						nodeType: "ParameterList",
-						parameters: [
-						],
-						src: "858:2:8"
-					},
-					returnParameters: {
-						id: 2034,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2033,
-								name: "",
-								nodeType: "VariableDeclaration",
-								scope: 2035,
-								src: "884:7:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_bytes32",
-									typeString: "bytes32"
-								},
-								typeName: {
-									id: 2032,
-									name: "bytes32",
-									nodeType: "ElementaryTypeName",
-									src: "884:7:8",
-									typeDescriptions: {
-										typeIdentifier: "t_bytes32",
-										typeString: "bytes32"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "883:9:8"
-					},
-					scope: 2189,
-					src: "833:60:8",
-					stateMutability: "view",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 2040,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "PERMIT_TYPEHASH",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 2036,
-						nodeType: "ParameterList",
-						parameters: [
-						],
-						src: "922:2:8"
-					},
-					returnParameters: {
-						id: 2039,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2038,
-								name: "",
-								nodeType: "VariableDeclaration",
-								scope: 2040,
-								src: "948:7:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_bytes32",
-									typeString: "bytes32"
-								},
-								typeName: {
-									id: 2037,
-									name: "bytes32",
-									nodeType: "ElementaryTypeName",
-									src: "948:7:8",
-									typeDescriptions: {
-										typeIdentifier: "t_bytes32",
-										typeString: "bytes32"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "947:9:8"
-					},
-					scope: 2189,
-					src: "898:59:8",
-					stateMutability: "pure",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 2047,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "nonces",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 2043,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2042,
-								name: "owner",
-								nodeType: "VariableDeclaration",
-								scope: 2047,
-								src: "978:13:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 2041,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "978:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "977:15:8"
-					},
-					returnParameters: {
-						id: 2046,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2045,
-								name: "",
-								nodeType: "VariableDeclaration",
-								scope: 2047,
-								src: "1016:4:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2044,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "1016:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "1015:6:8"
-					},
-					scope: 2189,
-					src: "962:60:8",
-					stateMutability: "view",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 2064,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "permit",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 2062,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2049,
-								name: "owner",
-								nodeType: "VariableDeclaration",
-								scope: 2064,
-								src: "1044:13:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 2048,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "1044:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2051,
-								name: "spender",
-								nodeType: "VariableDeclaration",
-								scope: 2064,
-								src: "1059:15:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 2050,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "1059:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2053,
-								name: "value",
-								nodeType: "VariableDeclaration",
-								scope: 2064,
-								src: "1076:10:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2052,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "1076:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2055,
-								name: "deadline",
-								nodeType: "VariableDeclaration",
-								scope: 2064,
-								src: "1088:13:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2054,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "1088:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2057,
-								name: "v",
-								nodeType: "VariableDeclaration",
-								scope: 2064,
-								src: "1103:7:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint8",
-									typeString: "uint8"
-								},
-								typeName: {
-									id: 2056,
-									name: "uint8",
-									nodeType: "ElementaryTypeName",
-									src: "1103:5:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint8",
-										typeString: "uint8"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2059,
-								name: "r",
-								nodeType: "VariableDeclaration",
-								scope: 2064,
-								src: "1112:9:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_bytes32",
-									typeString: "bytes32"
-								},
-								typeName: {
-									id: 2058,
-									name: "bytes32",
-									nodeType: "ElementaryTypeName",
-									src: "1112:7:8",
-									typeDescriptions: {
-										typeIdentifier: "t_bytes32",
-										typeString: "bytes32"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2061,
-								name: "s",
-								nodeType: "VariableDeclaration",
-								scope: 2064,
-								src: "1123:9:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_bytes32",
-									typeString: "bytes32"
-								},
-								typeName: {
-									id: 2060,
-									name: "bytes32",
-									nodeType: "ElementaryTypeName",
-									src: "1123:7:8",
-									typeDescriptions: {
-										typeIdentifier: "t_bytes32",
-										typeString: "bytes32"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "1043:90:8"
-					},
-					returnParameters: {
-						id: 2063,
-						nodeType: "ParameterList",
-						parameters: [
-						],
-						src: "1142:0:8"
-					},
-					scope: 2189,
-					src: "1028:115:8",
-					stateMutability: "nonpayable",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					anonymous: false,
-					documentation: null,
-					id: 2072,
-					name: "Mint",
-					nodeType: "EventDefinition",
-					parameters: {
-						id: 2071,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2066,
-								indexed: true,
-								name: "sender",
-								nodeType: "VariableDeclaration",
-								scope: 2072,
-								src: "1160:22:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 2065,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "1160:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2068,
-								indexed: false,
-								name: "amount0",
-								nodeType: "VariableDeclaration",
-								scope: 2072,
-								src: "1184:12:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2067,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "1184:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2070,
-								indexed: false,
-								name: "amount1",
-								nodeType: "VariableDeclaration",
-								scope: 2072,
-								src: "1198:12:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2069,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "1198:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "1159:52:8"
-					},
-					src: "1149:63:8"
-				},
-				{
-					anonymous: false,
-					documentation: null,
-					id: 2082,
-					name: "Burn",
-					nodeType: "EventDefinition",
-					parameters: {
-						id: 2081,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2074,
-								indexed: true,
-								name: "sender",
-								nodeType: "VariableDeclaration",
-								scope: 2082,
-								src: "1228:22:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 2073,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "1228:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2076,
-								indexed: false,
-								name: "amount0",
-								nodeType: "VariableDeclaration",
-								scope: 2082,
-								src: "1252:12:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2075,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "1252:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2078,
-								indexed: false,
-								name: "amount1",
-								nodeType: "VariableDeclaration",
-								scope: 2082,
-								src: "1266:12:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2077,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "1266:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
 							{
 								constant: false,
 								id: 2080,
 								indexed: true,
-								name: "to",
+								name: "owner",
 								nodeType: "VariableDeclaration",
-								scope: 2082,
-								src: "1280:18:8",
+								scope: 2086,
+								src: "70:21:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
@@ -3812,7 +2311,7 @@ var ast = {
 									id: 2079,
 									name: "address",
 									nodeType: "ElementaryTypeName",
-									src: "1280:7:8",
+									src: "70:7:9",
 									stateMutability: "nonpayable",
 									typeDescriptions: {
 										typeIdentifier: "t_address",
@@ -3821,30 +2320,15 @@ var ast = {
 								},
 								value: null,
 								visibility: "internal"
-							}
-						],
-						src: "1227:72:8"
-					},
-					src: "1217:83:8"
-				},
-				{
-					anonymous: false,
-					documentation: null,
-					id: 2096,
-					name: "Swap",
-					nodeType: "EventDefinition",
-					parameters: {
-						id: 2095,
-						nodeType: "ParameterList",
-						parameters: [
+							},
 							{
 								constant: false,
-								id: 2084,
+								id: 2082,
 								indexed: true,
-								name: "sender",
+								name: "spender",
 								nodeType: "VariableDeclaration",
-								scope: 2096,
-								src: "1325:22:8",
+								scope: 2086,
+								src: "93:23:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
@@ -3852,10 +2336,10 @@ var ast = {
 									typeString: "address"
 								},
 								typeName: {
-									id: 2083,
+									id: 2081,
 									name: "address",
 									nodeType: "ElementaryTypeName",
-									src: "1325:7:8",
+									src: "93:7:9",
 									stateMutability: "nonpayable",
 									typeDescriptions: {
 										typeIdentifier: "t_address",
@@ -3867,12 +2351,12 @@ var ast = {
 							},
 							{
 								constant: false,
-								id: 2086,
+								id: 2084,
 								indexed: false,
-								name: "amount0In",
+								name: "value",
 								nodeType: "VariableDeclaration",
-								scope: 2096,
-								src: "1357:14:8",
+								scope: 2086,
+								src: "118:10:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
@@ -3880,10 +2364,10 @@ var ast = {
 									typeString: "uint256"
 								},
 								typeName: {
-									id: 2085,
+									id: 2083,
 									name: "uint",
 									nodeType: "ElementaryTypeName",
-									src: "1357:4:8",
+									src: "118:4:9",
 									typeDescriptions: {
 										typeIdentifier: "t_uint256",
 										typeString: "uint256"
@@ -3891,29 +2375,45 @@ var ast = {
 								},
 								value: null,
 								visibility: "internal"
-							},
+							}
+						],
+						src: "69:60:9"
+					},
+					src: "55:75:9"
+				},
+				{
+					anonymous: false,
+					documentation: null,
+					id: 2094,
+					name: "Transfer",
+					nodeType: "EventDefinition",
+					parameters: {
+						id: 2093,
+						nodeType: "ParameterList",
+						parameters: [
 							{
 								constant: false,
 								id: 2088,
-								indexed: false,
-								name: "amount1In",
+								indexed: true,
+								name: "from",
 								nodeType: "VariableDeclaration",
-								scope: 2096,
-								src: "1381:14:8",
+								scope: 2094,
+								src: "150:20:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
+									typeIdentifier: "t_address",
+									typeString: "address"
 								},
 								typeName: {
 									id: 2087,
-									name: "uint",
+									name: "address",
 									nodeType: "ElementaryTypeName",
-									src: "1381:4:8",
+									src: "150:7:9",
+									stateMutability: "nonpayable",
 									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
+										typeIdentifier: "t_address",
+										typeString: "address"
 									}
 								},
 								value: null,
@@ -3922,25 +2422,26 @@ var ast = {
 							{
 								constant: false,
 								id: 2090,
-								indexed: false,
-								name: "amount0Out",
+								indexed: true,
+								name: "to",
 								nodeType: "VariableDeclaration",
-								scope: 2096,
-								src: "1405:15:8",
+								scope: 2094,
+								src: "172:18:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
+									typeIdentifier: "t_address",
+									typeString: "address"
 								},
 								typeName: {
 									id: 2089,
-									name: "uint",
+									name: "address",
 									nodeType: "ElementaryTypeName",
-									src: "1405:4:8",
+									src: "172:7:9",
+									stateMutability: "nonpayable",
 									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
+										typeIdentifier: "t_address",
+										typeString: "address"
 									}
 								},
 								value: null,
@@ -3950,10 +2451,10 @@ var ast = {
 								constant: false,
 								id: 2092,
 								indexed: false,
-								name: "amount1Out",
+								name: "value",
 								nodeType: "VariableDeclaration",
-								scope: 2096,
-								src: "1430:15:8",
+								scope: 2094,
+								src: "192:10:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
@@ -3964,7 +2465,7 @@ var ast = {
 									id: 2091,
 									name: "uint",
 									nodeType: "ElementaryTypeName",
-									src: "1430:4:8",
+									src: "192:4:9",
 									typeDescriptions: {
 										typeIdentifier: "t_uint256",
 										typeString: "uint256"
@@ -3972,15 +2473,40 @@ var ast = {
 								},
 								value: null,
 								visibility: "internal"
-							},
+							}
+						],
+						src: "149:54:9"
+					},
+					src: "135:69:9"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2099,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "baseToken",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2095,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "228:2:9"
+					},
+					returnParameters: {
+						id: 2098,
+						nodeType: "ParameterList",
+						parameters: [
 							{
 								constant: false,
-								id: 2094,
-								indexed: true,
-								name: "to",
+								id: 2097,
+								name: "",
 								nodeType: "VariableDeclaration",
-								scope: 2096,
-								src: "1455:18:8",
+								scope: 2099,
+								src: "254:7:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
@@ -3988,10 +2514,10 @@ var ast = {
 									typeString: "address"
 								},
 								typeName: {
-									id: 2093,
+									id: 2096,
 									name: "address",
 									nodeType: "ElementaryTypeName",
-									src: "1455:7:8",
+									src: "254:7:9",
 									stateMutability: "nonpayable",
 									typeDescriptions: {
 										typeIdentifier: "t_address",
@@ -4002,131 +2528,66 @@ var ast = {
 								visibility: "internal"
 							}
 						],
-						src: "1315:164:8"
+						src: "253:9:9"
 					},
-					src: "1305:175:8"
-				},
-				{
-					anonymous: false,
-					documentation: null,
-					id: 2102,
-					name: "Sync",
-					nodeType: "EventDefinition",
-					parameters: {
-						id: 2101,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2098,
-								indexed: false,
-								name: "reserve0",
-								nodeType: "VariableDeclaration",
-								scope: 2102,
-								src: "1496:16:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint112",
-									typeString: "uint112"
-								},
-								typeName: {
-									id: 2097,
-									name: "uint112",
-									nodeType: "ElementaryTypeName",
-									src: "1496:7:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint112",
-										typeString: "uint112"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2100,
-								indexed: false,
-								name: "reserve1",
-								nodeType: "VariableDeclaration",
-								scope: 2102,
-								src: "1514:16:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint112",
-									typeString: "uint112"
-								},
-								typeName: {
-									id: 2099,
-									name: "uint112",
-									nodeType: "ElementaryTypeName",
-									src: "1514:7:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint112",
-										typeString: "uint112"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "1495:36:8"
-					},
-					src: "1485:47:8"
+					scope: 2332,
+					src: "210:53:9",
+					stateMutability: "view",
+					superFunction: null,
+					visibility: "external"
 				},
 				{
 					body: null,
 					documentation: null,
-					id: 2107,
+					id: 2104,
 					implemented: false,
 					kind: "function",
 					modifiers: [
 					],
-					name: "MINIMUM_LIQUIDITY",
+					name: "name",
 					nodeType: "FunctionDefinition",
 					parameters: {
-						id: 2103,
+						id: 2100,
 						nodeType: "ParameterList",
 						parameters: [
 						],
-						src: "1564:2:8"
+						src: "281:2:9"
 					},
 					returnParameters: {
-						id: 2106,
+						id: 2103,
 						nodeType: "ParameterList",
 						parameters: [
 							{
 								constant: false,
-								id: 2105,
+								id: 2102,
 								name: "",
 								nodeType: "VariableDeclaration",
-								scope: 2107,
-								src: "1590:4:8",
+								scope: 2104,
+								src: "307:13:9",
 								stateVariable: false,
-								storageLocation: "default",
+								storageLocation: "memory",
 								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
+									typeIdentifier: "t_string_memory_ptr",
+									typeString: "string"
 								},
 								typeName: {
-									id: 2104,
-									name: "uint",
+									id: 2101,
+									name: "string",
 									nodeType: "ElementaryTypeName",
-									src: "1590:4:8",
+									src: "307:6:9",
 									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
+										typeIdentifier: "t_string_storage_ptr",
+										typeString: "string"
 									}
 								},
 								value: null,
 								visibility: "internal"
 							}
 						],
-						src: "1589:6:8"
+						src: "306:15:9"
 					},
-					scope: 2189,
-					src: "1538:58:8",
+					scope: 2332,
+					src: "268:54:9",
 					stateMutability: "pure",
 					superFunction: null,
 					visibility: "external"
@@ -4134,310 +2595,143 @@ var ast = {
 				{
 					body: null,
 					documentation: null,
-					id: 2112,
+					id: 2109,
 					implemented: false,
 					kind: "function",
 					modifiers: [
 					],
-					name: "factory",
+					name: "symbol",
 					nodeType: "FunctionDefinition",
 					parameters: {
+						id: 2105,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "342:2:9"
+					},
+					returnParameters: {
 						id: 2108,
 						nodeType: "ParameterList",
 						parameters: [
-						],
-						src: "1617:2:8"
-					},
-					returnParameters: {
-						id: 2111,
-						nodeType: "ParameterList",
-						parameters: [
 							{
 								constant: false,
-								id: 2110,
+								id: 2107,
 								name: "",
 								nodeType: "VariableDeclaration",
-								scope: 2112,
-								src: "1643:7:8",
+								scope: 2109,
+								src: "368:13:9",
 								stateVariable: false,
-								storageLocation: "default",
+								storageLocation: "memory",
 								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
+									typeIdentifier: "t_string_memory_ptr",
+									typeString: "string"
 								},
 								typeName: {
-									id: 2109,
-									name: "address",
+									id: 2106,
+									name: "string",
 									nodeType: "ElementaryTypeName",
-									src: "1643:7:8",
-									stateMutability: "nonpayable",
+									src: "368:6:9",
 									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
+										typeIdentifier: "t_string_storage_ptr",
+										typeString: "string"
 									}
 								},
 								value: null,
 								visibility: "internal"
 							}
 						],
-						src: "1642:9:8"
+						src: "367:15:9"
 					},
-					scope: 2189,
-					src: "1601:51:8",
-					stateMutability: "view",
+					scope: 2332,
+					src: "327:56:9",
+					stateMutability: "pure",
 					superFunction: null,
 					visibility: "external"
 				},
 				{
 					body: null,
 					documentation: null,
-					id: 2117,
+					id: 2114,
 					implemented: false,
 					kind: "function",
 					modifiers: [
 					],
-					name: "token0",
+					name: "decimals",
 					nodeType: "FunctionDefinition",
 					parameters: {
+						id: 2110,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "405:2:9"
+					},
+					returnParameters: {
 						id: 2113,
 						nodeType: "ParameterList",
 						parameters: [
-						],
-						src: "1672:2:8"
-					},
-					returnParameters: {
-						id: 2116,
-						nodeType: "ParameterList",
-						parameters: [
 							{
 								constant: false,
-								id: 2115,
+								id: 2112,
 								name: "",
 								nodeType: "VariableDeclaration",
-								scope: 2117,
-								src: "1698:7:8",
+								scope: 2114,
+								src: "431:5:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
+									typeIdentifier: "t_uint8",
+									typeString: "uint8"
 								},
 								typeName: {
-									id: 2114,
-									name: "address",
+									id: 2111,
+									name: "uint8",
 									nodeType: "ElementaryTypeName",
-									src: "1698:7:8",
-									stateMutability: "nonpayable",
+									src: "431:5:9",
 									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
+										typeIdentifier: "t_uint8",
+										typeString: "uint8"
 									}
 								},
 								value: null,
 								visibility: "internal"
 							}
 						],
-						src: "1697:9:8"
+						src: "430:7:9"
 					},
-					scope: 2189,
-					src: "1657:50:8",
-					stateMutability: "view",
+					scope: 2332,
+					src: "388:50:9",
+					stateMutability: "pure",
 					superFunction: null,
 					visibility: "external"
 				},
 				{
 					body: null,
 					documentation: null,
-					id: 2122,
+					id: 2119,
 					implemented: false,
 					kind: "function",
 					modifiers: [
 					],
-					name: "token1",
+					name: "totalSupply",
 					nodeType: "FunctionDefinition",
 					parameters: {
+						id: 2115,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "463:2:9"
+					},
+					returnParameters: {
 						id: 2118,
 						nodeType: "ParameterList",
 						parameters: [
-						],
-						src: "1727:2:8"
-					},
-					returnParameters: {
-						id: 2121,
-						nodeType: "ParameterList",
-						parameters: [
 							{
 								constant: false,
-								id: 2120,
+								id: 2117,
 								name: "",
 								nodeType: "VariableDeclaration",
-								scope: 2122,
-								src: "1753:7:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
-								},
-								typeName: {
-									id: 2119,
-									name: "address",
-									nodeType: "ElementaryTypeName",
-									src: "1753:7:8",
-									stateMutability: "nonpayable",
-									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "1752:9:8"
-					},
-					scope: 2189,
-					src: "1712:50:8",
-					stateMutability: "view",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 2131,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "getReserves",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 2123,
-						nodeType: "ParameterList",
-						parameters: [
-						],
-						src: "1787:2:8"
-					},
-					returnParameters: {
-						id: 2130,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2125,
-								name: "reserve0",
-								nodeType: "VariableDeclaration",
-								scope: 2131,
-								src: "1813:16:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint112",
-									typeString: "uint112"
-								},
-								typeName: {
-									id: 2124,
-									name: "uint112",
-									nodeType: "ElementaryTypeName",
-									src: "1813:7:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint112",
-										typeString: "uint112"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2127,
-								name: "reserve1",
-								nodeType: "VariableDeclaration",
-								scope: 2131,
-								src: "1831:16:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint112",
-									typeString: "uint112"
-								},
-								typeName: {
-									id: 2126,
-									name: "uint112",
-									nodeType: "ElementaryTypeName",
-									src: "1831:7:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint112",
-										typeString: "uint112"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2129,
-								name: "blockTimestampLast",
-								nodeType: "VariableDeclaration",
-								scope: 2131,
-								src: "1849:25:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint32",
-									typeString: "uint32"
-								},
-								typeName: {
-									id: 2128,
-									name: "uint32",
-									nodeType: "ElementaryTypeName",
-									src: "1849:6:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint32",
-										typeString: "uint32"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "1812:63:8"
-					},
-					scope: 2189,
-					src: "1767:109:8",
-					stateMutability: "view",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 2136,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "price0CumulativeLast",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 2132,
-						nodeType: "ParameterList",
-						parameters: [
-						],
-						src: "1910:2:8"
-					},
-					returnParameters: {
-						id: 2135,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2134,
-								name: "",
-								nodeType: "VariableDeclaration",
-								scope: 2136,
-								src: "1936:4:8",
+								scope: 2119,
+								src: "489:4:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
@@ -4445,10 +2739,10 @@ var ast = {
 									typeString: "uint256"
 								},
 								typeName: {
-									id: 2133,
+									id: 2116,
 									name: "uint",
 									nodeType: "ElementaryTypeName",
-									src: "1936:4:8",
+									src: "489:4:9",
 									typeDescriptions: {
 										typeIdentifier: "t_uint256",
 										typeString: "uint256"
@@ -4458,10 +2752,10 @@ var ast = {
 								visibility: "internal"
 							}
 						],
-						src: "1935:6:8"
+						src: "488:6:9"
 					},
-					scope: 2189,
-					src: "1881:61:8",
+					scope: 2332,
+					src: "443:52:9",
 					stateMutability: "view",
 					superFunction: null,
 					visibility: "external"
@@ -4469,31 +2763,244 @@ var ast = {
 				{
 					body: null,
 					documentation: null,
-					id: 2141,
+					id: 2126,
 					implemented: false,
 					kind: "function",
 					modifiers: [
 					],
-					name: "price1CumulativeLast",
+					name: "balanceOf",
 					nodeType: "FunctionDefinition",
 					parameters: {
-						id: 2137,
+						id: 2122,
 						nodeType: "ParameterList",
 						parameters: [
+							{
+								constant: false,
+								id: 2121,
+								name: "owner",
+								nodeType: "VariableDeclaration",
+								scope: 2126,
+								src: "519:13:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2120,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "519:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
 						],
-						src: "1976:2:8"
+						src: "518:15:9"
 					},
 					returnParameters: {
+						id: 2125,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2124,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2126,
+								src: "557:4:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2123,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "557:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "556:6:9"
+					},
+					scope: 2332,
+					src: "500:63:9",
+					stateMutability: "view",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2135,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "allowance",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2131,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2128,
+								name: "owner",
+								nodeType: "VariableDeclaration",
+								scope: 2135,
+								src: "587:13:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2127,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "587:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2130,
+								name: "spender",
+								nodeType: "VariableDeclaration",
+								scope: 2135,
+								src: "602:15:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2129,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "602:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "586:32:9"
+					},
+					returnParameters: {
+						id: 2134,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2133,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2135,
+								src: "642:4:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2132,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "642:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "641:6:9"
+					},
+					scope: 2332,
+					src: "568:80:9",
+					stateMutability: "view",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2144,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "approve",
+					nodeType: "FunctionDefinition",
+					parameters: {
 						id: 2140,
 						nodeType: "ParameterList",
 						parameters: [
 							{
 								constant: false,
-								id: 2139,
-								name: "",
+								id: 2137,
+								name: "spender",
 								nodeType: "VariableDeclaration",
-								scope: 2141,
-								src: "2002:4:8",
+								scope: 2144,
+								src: "671:15:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2136,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "671:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2139,
+								name: "value",
+								nodeType: "VariableDeclaration",
+								scope: 2144,
+								src: "688:10:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
@@ -4504,7 +3011,7 @@ var ast = {
 									id: 2138,
 									name: "uint",
 									nodeType: "ElementaryTypeName",
-									src: "2002:4:8",
+									src: "688:4:9",
 									typeDescriptions: {
 										typeIdentifier: "t_uint256",
 										typeString: "uint256"
@@ -4514,67 +3021,44 @@ var ast = {
 								visibility: "internal"
 							}
 						],
-						src: "2001:6:8"
-					},
-					scope: 2189,
-					src: "1947:61:8",
-					stateMutability: "view",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 2146,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "kLast",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 2142,
-						nodeType: "ParameterList",
-						parameters: [
-						],
-						src: "2027:2:8"
+						src: "670:29:9"
 					},
 					returnParameters: {
-						id: 2145,
+						id: 2143,
 						nodeType: "ParameterList",
 						parameters: [
 							{
 								constant: false,
-								id: 2144,
+								id: 2142,
 								name: "",
 								nodeType: "VariableDeclaration",
-								scope: 2146,
-								src: "2053:4:8",
+								scope: 2144,
+								src: "718:4:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
+									typeIdentifier: "t_bool",
+									typeString: "bool"
 								},
 								typeName: {
-									id: 2143,
-									name: "uint",
+									id: 2141,
+									name: "bool",
 									nodeType: "ElementaryTypeName",
-									src: "2053:4:8",
+									src: "718:4:9",
 									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
+										typeIdentifier: "t_bool",
+										typeString: "bool"
 									}
 								},
 								value: null,
 								visibility: "internal"
 							}
 						],
-						src: "2052:6:8"
+						src: "717:6:9"
 					},
-					scope: 2189,
-					src: "2013:46:8",
-					stateMutability: "view",
+					scope: 2332,
+					src: "654:70:9",
+					stateMutability: "nonpayable",
 					superFunction: null,
 					visibility: "external"
 				},
@@ -4586,7 +3070,7 @@ var ast = {
 					kind: "function",
 					modifiers: [
 					],
-					name: "mint",
+					name: "transfer",
 					nodeType: "FunctionDefinition",
 					parameters: {
 						id: 2149,
@@ -4594,11 +3078,11 @@ var ast = {
 						parameters: [
 							{
 								constant: false,
-								id: 2148,
+								id: 2146,
 								name: "to",
 								nodeType: "VariableDeclaration",
 								scope: 2153,
-								src: "2079:10:8",
+								src: "747:10:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
@@ -4606,10 +3090,10 @@ var ast = {
 									typeString: "address"
 								},
 								typeName: {
-									id: 2147,
+									id: 2145,
 									name: "address",
 									nodeType: "ElementaryTypeName",
-									src: "2079:7:8",
+									src: "747:7:9",
 									stateMutability: "nonpayable",
 									typeDescriptions: {
 										typeIdentifier: "t_address",
@@ -4618,21 +3102,14 @@ var ast = {
 								},
 								value: null,
 								visibility: "internal"
-							}
-						],
-						src: "2078:12:8"
-					},
-					returnParameters: {
-						id: 2152,
-						nodeType: "ParameterList",
-						parameters: [
+							},
 							{
 								constant: false,
-								id: 2151,
-								name: "liquidity",
+								id: 2148,
+								name: "value",
 								nodeType: "VariableDeclaration",
 								scope: 2153,
-								src: "2109:14:8",
+								src: "759:10:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
@@ -4640,10 +3117,10 @@ var ast = {
 									typeString: "uint256"
 								},
 								typeName: {
-									id: 2150,
+									id: 2147,
 									name: "uint",
 									nodeType: "ElementaryTypeName",
-									src: "2109:4:8",
+									src: "759:4:9",
 									typeDescriptions: {
 										typeIdentifier: "t_uint256",
 										typeString: "uint256"
@@ -4653,10 +3130,43 @@ var ast = {
 								visibility: "internal"
 							}
 						],
-						src: "2108:16:8"
+						src: "746:24:9"
 					},
-					scope: 2189,
-					src: "2065:60:8",
+					returnParameters: {
+						id: 2152,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2151,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2153,
+								src: "789:4:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_bool",
+									typeString: "bool"
+								},
+								typeName: {
+									id: 2150,
+									name: "bool",
+									nodeType: "ElementaryTypeName",
+									src: "789:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_bool",
+										typeString: "bool"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "788:6:9"
+					},
+					scope: 2332,
+					src: "729:66:9",
 					stateMutability: "nonpayable",
 					superFunction: null,
 					visibility: "external"
@@ -4664,24 +3174,24 @@ var ast = {
 				{
 					body: null,
 					documentation: null,
-					id: 2162,
+					id: 2164,
 					implemented: false,
 					kind: "function",
 					modifiers: [
 					],
-					name: "burn",
+					name: "transferFrom",
 					nodeType: "FunctionDefinition",
 					parameters: {
-						id: 2156,
+						id: 2160,
 						nodeType: "ParameterList",
 						parameters: [
 							{
 								constant: false,
 								id: 2155,
-								name: "to",
+								name: "from",
 								nodeType: "VariableDeclaration",
-								scope: 2162,
-								src: "2144:10:8",
+								scope: 2164,
+								src: "822:12:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
@@ -4692,7 +3202,7 @@ var ast = {
 									id: 2154,
 									name: "address",
 									nodeType: "ElementaryTypeName",
-									src: "2144:7:8",
+									src: "822:7:9",
 									stateMutability: "nonpayable",
 									typeDescriptions: {
 										typeIdentifier: "t_address",
@@ -4701,148 +3211,14 @@ var ast = {
 								},
 								value: null,
 								visibility: "internal"
-							}
-						],
-						src: "2143:12:8"
-					},
-					returnParameters: {
-						id: 2161,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2158,
-								name: "amount0",
-								nodeType: "VariableDeclaration",
-								scope: 2162,
-								src: "2174:12:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2157,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "2174:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
 							},
 							{
 								constant: false,
-								id: 2160,
-								name: "amount1",
-								nodeType: "VariableDeclaration",
-								scope: 2162,
-								src: "2188:12:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2159,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "2188:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							}
-						],
-						src: "2173:28:8"
-					},
-					scope: 2189,
-					src: "2130:72:8",
-					stateMutability: "nonpayable",
-					superFunction: null,
-					visibility: "external"
-				},
-				{
-					body: null,
-					documentation: null,
-					id: 2173,
-					implemented: false,
-					kind: "function",
-					modifiers: [
-					],
-					name: "swap",
-					nodeType: "FunctionDefinition",
-					parameters: {
-						id: 2171,
-						nodeType: "ParameterList",
-						parameters: [
-							{
-								constant: false,
-								id: 2164,
-								name: "amount0Out",
-								nodeType: "VariableDeclaration",
-								scope: 2173,
-								src: "2221:15:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2163,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "2221:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2166,
-								name: "amount1Out",
-								nodeType: "VariableDeclaration",
-								scope: 2173,
-								src: "2238:15:8",
-								stateVariable: false,
-								storageLocation: "default",
-								typeDescriptions: {
-									typeIdentifier: "t_uint256",
-									typeString: "uint256"
-								},
-								typeName: {
-									id: 2165,
-									name: "uint",
-									nodeType: "ElementaryTypeName",
-									src: "2238:4:8",
-									typeDescriptions: {
-										typeIdentifier: "t_uint256",
-										typeString: "uint256"
-									}
-								},
-								value: null,
-								visibility: "internal"
-							},
-							{
-								constant: false,
-								id: 2168,
+								id: 2157,
 								name: "to",
 								nodeType: "VariableDeclaration",
-								scope: 2173,
-								src: "2255:10:8",
+								scope: 2164,
+								src: "836:10:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
@@ -4850,10 +3226,10 @@ var ast = {
 									typeString: "address"
 								},
 								typeName: {
-									id: 2167,
+									id: 2156,
 									name: "address",
 									nodeType: "ElementaryTypeName",
-									src: "2255:7:8",
+									src: "836:7:9",
 									stateMutability: "nonpayable",
 									typeDescriptions: {
 										typeIdentifier: "t_address",
@@ -4865,42 +3241,68 @@ var ast = {
 							},
 							{
 								constant: false,
-								id: 2170,
-								name: "data",
+								id: 2159,
+								name: "value",
 								nodeType: "VariableDeclaration",
-								scope: 2173,
-								src: "2267:19:8",
+								scope: 2164,
+								src: "848:10:9",
 								stateVariable: false,
-								storageLocation: "calldata",
+								storageLocation: "default",
 								typeDescriptions: {
-									typeIdentifier: "t_bytes_calldata_ptr",
-									typeString: "bytes"
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
 								},
 								typeName: {
-									id: 2169,
-									name: "bytes",
+									id: 2158,
+									name: "uint",
 									nodeType: "ElementaryTypeName",
-									src: "2267:5:8",
+									src: "848:4:9",
 									typeDescriptions: {
-										typeIdentifier: "t_bytes_storage_ptr",
-										typeString: "bytes"
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
 									}
 								},
 								value: null,
 								visibility: "internal"
 							}
 						],
-						src: "2220:67:8"
+						src: "821:38:9"
 					},
 					returnParameters: {
-						id: 2172,
+						id: 2163,
 						nodeType: "ParameterList",
 						parameters: [
+							{
+								constant: false,
+								id: 2162,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2164,
+								src: "878:4:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_bool",
+									typeString: "bool"
+								},
+								typeName: {
+									id: 2161,
+									name: "bool",
+									nodeType: "ElementaryTypeName",
+									src: "878:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_bool",
+										typeString: "bool"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
 						],
-						src: "2296:0:8"
+						src: "877:6:9"
 					},
-					scope: 2189,
-					src: "2207:90:8",
+					scope: 2332,
+					src: "800:84:9",
 					stateMutability: "nonpayable",
 					superFunction: null,
 					visibility: "external"
@@ -4908,57 +3310,112 @@ var ast = {
 				{
 					body: null,
 					documentation: null,
-					id: 2178,
+					id: 2169,
 					implemented: false,
 					kind: "function",
 					modifiers: [
 					],
-					name: "skim",
+					name: "DOMAIN_SEPARATOR",
 					nodeType: "FunctionDefinition",
 					parameters: {
-						id: 2176,
+						id: 2165,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "915:2:9"
+					},
+					returnParameters: {
+						id: 2168,
 						nodeType: "ParameterList",
 						parameters: [
 							{
 								constant: false,
-								id: 2175,
-								name: "to",
+								id: 2167,
+								name: "",
 								nodeType: "VariableDeclaration",
-								scope: 2178,
-								src: "2316:10:8",
+								scope: 2169,
+								src: "941:7:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
-									typeIdentifier: "t_address",
-									typeString: "address"
+									typeIdentifier: "t_bytes32",
+									typeString: "bytes32"
 								},
 								typeName: {
-									id: 2174,
-									name: "address",
+									id: 2166,
+									name: "bytes32",
 									nodeType: "ElementaryTypeName",
-									src: "2316:7:8",
-									stateMutability: "nonpayable",
+									src: "941:7:9",
 									typeDescriptions: {
-										typeIdentifier: "t_address",
-										typeString: "address"
+										typeIdentifier: "t_bytes32",
+										typeString: "bytes32"
 									}
 								},
 								value: null,
 								visibility: "internal"
 							}
 						],
-						src: "2315:12:8"
+						src: "940:9:9"
 					},
-					returnParameters: {
-						id: 2177,
+					scope: 2332,
+					src: "890:60:9",
+					stateMutability: "view",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2174,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "PERMIT_TYPEHASH",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2170,
 						nodeType: "ParameterList",
 						parameters: [
 						],
-						src: "2336:0:8"
+						src: "979:2:9"
 					},
-					scope: 2189,
-					src: "2302:35:8",
-					stateMutability: "nonpayable",
+					returnParameters: {
+						id: 2173,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2172,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2174,
+								src: "1005:7:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_bytes32",
+									typeString: "bytes32"
+								},
+								typeName: {
+									id: 2171,
+									name: "bytes32",
+									nodeType: "ElementaryTypeName",
+									src: "1005:7:9",
+									typeDescriptions: {
+										typeIdentifier: "t_bytes32",
+										typeString: "bytes32"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "1004:9:9"
+					},
+					scope: 2332,
+					src: "955:59:9",
+					stateMutability: "pure",
 					superFunction: null,
 					visibility: "external"
 				},
@@ -4970,49 +3427,102 @@ var ast = {
 					kind: "function",
 					modifiers: [
 					],
-					name: "sync",
+					name: "nonces",
 					nodeType: "FunctionDefinition",
 					parameters: {
-						id: 2179,
+						id: 2177,
 						nodeType: "ParameterList",
 						parameters: [
+							{
+								constant: false,
+								id: 2176,
+								name: "owner",
+								nodeType: "VariableDeclaration",
+								scope: 2181,
+								src: "1035:13:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2175,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "1035:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
 						],
-						src: "2355:2:8"
+						src: "1034:15:9"
 					},
 					returnParameters: {
 						id: 2180,
 						nodeType: "ParameterList",
 						parameters: [
+							{
+								constant: false,
+								id: 2179,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2181,
+								src: "1073:4:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2178,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "1073:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
 						],
-						src: "2366:0:8"
+						src: "1072:6:9"
 					},
-					scope: 2189,
-					src: "2342:25:8",
-					stateMutability: "nonpayable",
+					scope: 2332,
+					src: "1019:60:9",
+					stateMutability: "view",
 					superFunction: null,
 					visibility: "external"
 				},
 				{
 					body: null,
 					documentation: null,
-					id: 2188,
+					id: 2198,
 					implemented: false,
 					kind: "function",
 					modifiers: [
 					],
-					name: "initialize",
+					name: "permit",
 					nodeType: "FunctionDefinition",
 					parameters: {
-						id: 2186,
+						id: 2196,
 						nodeType: "ParameterList",
 						parameters: [
 							{
 								constant: false,
 								id: 2183,
-								name: "",
+								name: "owner",
 								nodeType: "VariableDeclaration",
-								scope: 2188,
-								src: "2393:7:8",
+								scope: 2198,
+								src: "1101:13:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
@@ -5023,7 +3533,7 @@ var ast = {
 									id: 2182,
 									name: "address",
 									nodeType: "ElementaryTypeName",
-									src: "2393:7:8",
+									src: "1101:7:9",
 									stateMutability: "nonpayable",
 									typeDescriptions: {
 										typeIdentifier: "t_address",
@@ -5036,10 +3546,10 @@ var ast = {
 							{
 								constant: false,
 								id: 2185,
-								name: "",
+								name: "spender",
 								nodeType: "VariableDeclaration",
-								scope: 2188,
-								src: "2402:7:8",
+								scope: 2198,
+								src: "1116:15:9",
 								stateVariable: false,
 								storageLocation: "default",
 								typeDescriptions: {
@@ -5050,7 +3560,370 @@ var ast = {
 									id: 2184,
 									name: "address",
 									nodeType: "ElementaryTypeName",
-									src: "2402:7:8",
+									src: "1116:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2187,
+								name: "value",
+								nodeType: "VariableDeclaration",
+								scope: 2198,
+								src: "1133:10:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2186,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "1133:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2189,
+								name: "deadline",
+								nodeType: "VariableDeclaration",
+								scope: 2198,
+								src: "1145:13:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2188,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "1145:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2191,
+								name: "v",
+								nodeType: "VariableDeclaration",
+								scope: 2198,
+								src: "1160:7:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint8",
+									typeString: "uint8"
+								},
+								typeName: {
+									id: 2190,
+									name: "uint8",
+									nodeType: "ElementaryTypeName",
+									src: "1160:5:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint8",
+										typeString: "uint8"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2193,
+								name: "r",
+								nodeType: "VariableDeclaration",
+								scope: 2198,
+								src: "1169:9:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_bytes32",
+									typeString: "bytes32"
+								},
+								typeName: {
+									id: 2192,
+									name: "bytes32",
+									nodeType: "ElementaryTypeName",
+									src: "1169:7:9",
+									typeDescriptions: {
+										typeIdentifier: "t_bytes32",
+										typeString: "bytes32"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2195,
+								name: "s",
+								nodeType: "VariableDeclaration",
+								scope: 2198,
+								src: "1180:9:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_bytes32",
+									typeString: "bytes32"
+								},
+								typeName: {
+									id: 2194,
+									name: "bytes32",
+									nodeType: "ElementaryTypeName",
+									src: "1180:7:9",
+									typeDescriptions: {
+										typeIdentifier: "t_bytes32",
+										typeString: "bytes32"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "1100:90:9"
+					},
+					returnParameters: {
+						id: 2197,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "1199:0:9"
+					},
+					scope: 2332,
+					src: "1085:115:9",
+					stateMutability: "nonpayable",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					anonymous: false,
+					documentation: null,
+					id: 2206,
+					name: "Mint",
+					nodeType: "EventDefinition",
+					parameters: {
+						id: 2205,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2200,
+								indexed: true,
+								name: "sender",
+								nodeType: "VariableDeclaration",
+								scope: 2206,
+								src: "1217:22:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2199,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "1217:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2202,
+								indexed: false,
+								name: "amount0",
+								nodeType: "VariableDeclaration",
+								scope: 2206,
+								src: "1241:12:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2201,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "1241:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2204,
+								indexed: false,
+								name: "amount1",
+								nodeType: "VariableDeclaration",
+								scope: 2206,
+								src: "1255:12:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2203,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "1255:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "1216:52:9"
+					},
+					src: "1206:63:9"
+				},
+				{
+					anonymous: false,
+					documentation: null,
+					id: 2216,
+					name: "Burn",
+					nodeType: "EventDefinition",
+					parameters: {
+						id: 2215,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2208,
+								indexed: true,
+								name: "sender",
+								nodeType: "VariableDeclaration",
+								scope: 2216,
+								src: "1285:22:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2207,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "1285:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2210,
+								indexed: false,
+								name: "amount0",
+								nodeType: "VariableDeclaration",
+								scope: 2216,
+								src: "1309:12:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2209,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "1309:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2212,
+								indexed: false,
+								name: "amount1",
+								nodeType: "VariableDeclaration",
+								scope: 2216,
+								src: "1323:12:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2211,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "1323:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2214,
+								indexed: true,
+								name: "to",
+								nodeType: "VariableDeclaration",
+								scope: 2216,
+								src: "1337:18:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2213,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "1337:7:9",
 									stateMutability: "nonpayable",
 									typeDescriptions: {
 										typeIdentifier: "t_address",
@@ -5061,34 +3934,1381 @@ var ast = {
 								visibility: "internal"
 							}
 						],
-						src: "2392:18:8"
+						src: "1284:72:9"
 					},
-					returnParameters: {
-						id: 2187,
+					src: "1274:83:9"
+				},
+				{
+					anonymous: false,
+					documentation: null,
+					id: 2230,
+					name: "Swap",
+					nodeType: "EventDefinition",
+					parameters: {
+						id: 2229,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2218,
+								indexed: true,
+								name: "sender",
+								nodeType: "VariableDeclaration",
+								scope: 2230,
+								src: "1382:22:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2217,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "1382:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2220,
+								indexed: false,
+								name: "amount0In",
+								nodeType: "VariableDeclaration",
+								scope: 2230,
+								src: "1414:14:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2219,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "1414:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2222,
+								indexed: false,
+								name: "amount1In",
+								nodeType: "VariableDeclaration",
+								scope: 2230,
+								src: "1438:14:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2221,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "1438:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2224,
+								indexed: false,
+								name: "amount0Out",
+								nodeType: "VariableDeclaration",
+								scope: 2230,
+								src: "1462:15:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2223,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "1462:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2226,
+								indexed: false,
+								name: "amount1Out",
+								nodeType: "VariableDeclaration",
+								scope: 2230,
+								src: "1487:15:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2225,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "1487:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2228,
+								indexed: true,
+								name: "to",
+								nodeType: "VariableDeclaration",
+								scope: 2230,
+								src: "1512:18:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2227,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "1512:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "1372:164:9"
+					},
+					src: "1362:175:9"
+				},
+				{
+					anonymous: false,
+					documentation: null,
+					id: 2236,
+					name: "Sync",
+					nodeType: "EventDefinition",
+					parameters: {
+						id: 2235,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2232,
+								indexed: false,
+								name: "reserve0",
+								nodeType: "VariableDeclaration",
+								scope: 2236,
+								src: "1553:16:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint112",
+									typeString: "uint112"
+								},
+								typeName: {
+									id: 2231,
+									name: "uint112",
+									nodeType: "ElementaryTypeName",
+									src: "1553:7:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint112",
+										typeString: "uint112"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2234,
+								indexed: false,
+								name: "reserve1",
+								nodeType: "VariableDeclaration",
+								scope: 2236,
+								src: "1571:16:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint112",
+									typeString: "uint112"
+								},
+								typeName: {
+									id: 2233,
+									name: "uint112",
+									nodeType: "ElementaryTypeName",
+									src: "1571:7:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint112",
+										typeString: "uint112"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "1552:36:9"
+					},
+					src: "1542:47:9"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2241,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "MINIMUM_LIQUIDITY",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2237,
 						nodeType: "ParameterList",
 						parameters: [
 						],
-						src: "2419:0:8"
+						src: "1621:2:9"
 					},
-					scope: 2189,
-					src: "2373:47:8",
+					returnParameters: {
+						id: 2240,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2239,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2241,
+								src: "1647:4:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2238,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "1647:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "1646:6:9"
+					},
+					scope: 2332,
+					src: "1595:58:9",
+					stateMutability: "pure",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2246,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "factory",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2242,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "1674:2:9"
+					},
+					returnParameters: {
+						id: 2245,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2244,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2246,
+								src: "1700:7:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2243,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "1700:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "1699:9:9"
+					},
+					scope: 2332,
+					src: "1658:51:9",
+					stateMutability: "view",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2251,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "token0",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2247,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "1729:2:9"
+					},
+					returnParameters: {
+						id: 2250,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2249,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2251,
+								src: "1755:7:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2248,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "1755:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "1754:9:9"
+					},
+					scope: 2332,
+					src: "1714:50:9",
+					stateMutability: "view",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2256,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "token1",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2252,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "1784:2:9"
+					},
+					returnParameters: {
+						id: 2255,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2254,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2256,
+								src: "1810:7:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2253,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "1810:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "1809:9:9"
+					},
+					scope: 2332,
+					src: "1769:50:9",
+					stateMutability: "view",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2265,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "getReserves",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2257,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "1844:2:9"
+					},
+					returnParameters: {
+						id: 2264,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2259,
+								name: "reserve0",
+								nodeType: "VariableDeclaration",
+								scope: 2265,
+								src: "1870:16:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint112",
+									typeString: "uint112"
+								},
+								typeName: {
+									id: 2258,
+									name: "uint112",
+									nodeType: "ElementaryTypeName",
+									src: "1870:7:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint112",
+										typeString: "uint112"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2261,
+								name: "reserve1",
+								nodeType: "VariableDeclaration",
+								scope: 2265,
+								src: "1888:16:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint112",
+									typeString: "uint112"
+								},
+								typeName: {
+									id: 2260,
+									name: "uint112",
+									nodeType: "ElementaryTypeName",
+									src: "1888:7:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint112",
+										typeString: "uint112"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2263,
+								name: "blockTimestampLast",
+								nodeType: "VariableDeclaration",
+								scope: 2265,
+								src: "1906:25:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint32",
+									typeString: "uint32"
+								},
+								typeName: {
+									id: 2262,
+									name: "uint32",
+									nodeType: "ElementaryTypeName",
+									src: "1906:6:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint32",
+										typeString: "uint32"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "1869:63:9"
+					},
+					scope: 2332,
+					src: "1824:109:9",
+					stateMutability: "view",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2270,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "price0CumulativeLast",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2266,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "1967:2:9"
+					},
+					returnParameters: {
+						id: 2269,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2268,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2270,
+								src: "1993:4:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2267,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "1993:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "1992:6:9"
+					},
+					scope: 2332,
+					src: "1938:61:9",
+					stateMutability: "view",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2275,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "price1CumulativeLast",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2271,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "2033:2:9"
+					},
+					returnParameters: {
+						id: 2274,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2273,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2275,
+								src: "2059:4:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2272,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "2059:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "2058:6:9"
+					},
+					scope: 2332,
+					src: "2004:61:9",
+					stateMutability: "view",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2280,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "kLast",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2276,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "2084:2:9"
+					},
+					returnParameters: {
+						id: 2279,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2278,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2280,
+								src: "2110:4:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2277,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "2110:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "2109:6:9"
+					},
+					scope: 2332,
+					src: "2070:46:9",
+					stateMutability: "view",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2287,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "mint",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2283,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2282,
+								name: "to",
+								nodeType: "VariableDeclaration",
+								scope: 2287,
+								src: "2136:10:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2281,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "2136:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "2135:12:9"
+					},
+					returnParameters: {
+						id: 2286,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2285,
+								name: "liquidity",
+								nodeType: "VariableDeclaration",
+								scope: 2287,
+								src: "2166:14:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2284,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "2166:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "2165:16:9"
+					},
+					scope: 2332,
+					src: "2122:60:9",
+					stateMutability: "nonpayable",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2296,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "burn",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2290,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2289,
+								name: "to",
+								nodeType: "VariableDeclaration",
+								scope: 2296,
+								src: "2201:10:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2288,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "2201:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "2200:12:9"
+					},
+					returnParameters: {
+						id: 2295,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2292,
+								name: "amount0",
+								nodeType: "VariableDeclaration",
+								scope: 2296,
+								src: "2231:12:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2291,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "2231:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2294,
+								name: "amount1",
+								nodeType: "VariableDeclaration",
+								scope: 2296,
+								src: "2245:12:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2293,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "2245:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "2230:28:9"
+					},
+					scope: 2332,
+					src: "2187:72:9",
+					stateMutability: "nonpayable",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2311,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "swap",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2309,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2298,
+								name: "amount0Out",
+								nodeType: "VariableDeclaration",
+								scope: 2311,
+								src: "2278:15:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2297,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "2278:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2300,
+								name: "amount1Out",
+								nodeType: "VariableDeclaration",
+								scope: 2311,
+								src: "2295:15:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2299,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "2295:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2302,
+								name: "amount0Fee",
+								nodeType: "VariableDeclaration",
+								scope: 2311,
+								src: "2312:15:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2301,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "2312:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2304,
+								name: "amount1Fee",
+								nodeType: "VariableDeclaration",
+								scope: 2311,
+								src: "2329:15:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_uint256",
+									typeString: "uint256"
+								},
+								typeName: {
+									id: 2303,
+									name: "uint",
+									nodeType: "ElementaryTypeName",
+									src: "2329:4:9",
+									typeDescriptions: {
+										typeIdentifier: "t_uint256",
+										typeString: "uint256"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2306,
+								name: "to",
+								nodeType: "VariableDeclaration",
+								scope: 2311,
+								src: "2346:10:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2305,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "2346:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2308,
+								name: "data",
+								nodeType: "VariableDeclaration",
+								scope: 2311,
+								src: "2358:19:9",
+								stateVariable: false,
+								storageLocation: "calldata",
+								typeDescriptions: {
+									typeIdentifier: "t_bytes_calldata_ptr",
+									typeString: "bytes"
+								},
+								typeName: {
+									id: 2307,
+									name: "bytes",
+									nodeType: "ElementaryTypeName",
+									src: "2358:5:9",
+									typeDescriptions: {
+										typeIdentifier: "t_bytes_storage_ptr",
+										typeString: "bytes"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "2277:101:9"
+					},
+					returnParameters: {
+						id: 2310,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "2387:0:9"
+					},
+					scope: 2332,
+					src: "2264:124:9",
+					stateMutability: "nonpayable",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2316,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "skim",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2314,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2313,
+								name: "to",
+								nodeType: "VariableDeclaration",
+								scope: 2316,
+								src: "2407:10:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2312,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "2407:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "2406:12:9"
+					},
+					returnParameters: {
+						id: 2315,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "2427:0:9"
+					},
+					scope: 2332,
+					src: "2393:35:9",
+					stateMutability: "nonpayable",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2319,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "sync",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2317,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "2446:2:9"
+					},
+					returnParameters: {
+						id: 2318,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "2457:0:9"
+					},
+					scope: 2332,
+					src: "2433:25:9",
+					stateMutability: "nonpayable",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2326,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "initialize",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2324,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2321,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2326,
+								src: "2484:7:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2320,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "2484:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							},
+							{
+								constant: false,
+								id: 2323,
+								name: "",
+								nodeType: "VariableDeclaration",
+								scope: 2326,
+								src: "2493:7:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2322,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "2493:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "2483:18:9"
+					},
+					returnParameters: {
+						id: 2325,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "2510:0:9"
+					},
+					scope: 2332,
+					src: "2464:47:9",
+					stateMutability: "nonpayable",
+					superFunction: null,
+					visibility: "external"
+				},
+				{
+					body: null,
+					documentation: null,
+					id: 2331,
+					implemented: false,
+					kind: "function",
+					modifiers: [
+					],
+					name: "setBaseToken",
+					nodeType: "FunctionDefinition",
+					parameters: {
+						id: 2329,
+						nodeType: "ParameterList",
+						parameters: [
+							{
+								constant: false,
+								id: 2328,
+								name: "_baseToken",
+								nodeType: "VariableDeclaration",
+								scope: 2331,
+								src: "2538:18:9",
+								stateVariable: false,
+								storageLocation: "default",
+								typeDescriptions: {
+									typeIdentifier: "t_address",
+									typeString: "address"
+								},
+								typeName: {
+									id: 2327,
+									name: "address",
+									nodeType: "ElementaryTypeName",
+									src: "2538:7:9",
+									stateMutability: "nonpayable",
+									typeDescriptions: {
+										typeIdentifier: "t_address",
+										typeString: "address"
+									}
+								},
+								value: null,
+								visibility: "internal"
+							}
+						],
+						src: "2537:20:9"
+					},
+					returnParameters: {
+						id: 2330,
+						nodeType: "ParameterList",
+						parameters: [
+						],
+						src: "2566:0:9"
+					},
+					scope: 2332,
+					src: "2516:51:9",
 					stateMutability: "nonpayable",
 					superFunction: null,
 					visibility: "external"
 				}
 			],
-			scope: 2190,
-			src: "26:2396:8"
+			scope: 2333,
+			src: "26:2543:9"
 		}
 	],
-	src: "0:2423:8"
+	src: "0:2570:9"
 };
 var legacyAST = {
 	attributes: {
-		absolutePath: "project:/contracts/interfaces/IPyeSwapPair.sol",
+		absolutePath: "project:/contracts/interfaces/IPYESwapPair.sol",
 		exportedSymbols: {
-			IPyeSwapPair: [
-				2189
+			IPYESwapPair: [
+				2332
 			]
 		}
 	},
@@ -5102,9 +5322,9 @@ var legacyAST = {
 					".0"
 				]
 			},
-			id: 1949,
+			id: 2078,
 			name: "PragmaDirective",
-			src: "0:24:8"
+			src: "0:24:9"
 		},
 		{
 			attributes: {
@@ -5118,10 +5338,10 @@ var legacyAST = {
 				documentation: null,
 				fullyImplemented: false,
 				linearizedBaseContracts: [
-					2189
+					2332
 				],
-				name: "IPyeSwapPair",
-				scope: 2190
+				name: "IPYESwapPair",
+				scope: 2333
 			},
 			children: [
 				{
@@ -5138,1687 +5358,7 @@ var legacyAST = {
 										constant: false,
 										indexed: true,
 										name: "owner",
-										scope: 1957,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 1950,
-											name: "ElementaryTypeName",
-											src: "71:7:8"
-										}
-									],
-									id: 1951,
-									name: "VariableDeclaration",
-									src: "71:21:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										indexed: true,
-										name: "spender",
-										scope: 1957,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 1952,
-											name: "ElementaryTypeName",
-											src: "94:7:8"
-										}
-									],
-									id: 1953,
-									name: "VariableDeclaration",
-									src: "94:23:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										indexed: false,
-										name: "value",
-										scope: 1957,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 1954,
-											name: "ElementaryTypeName",
-											src: "119:4:8"
-										}
-									],
-									id: 1955,
-									name: "VariableDeclaration",
-									src: "119:10:8"
-								}
-							],
-							id: 1956,
-							name: "ParameterList",
-							src: "70:60:8"
-						}
-					],
-					id: 1957,
-					name: "EventDefinition",
-					src: "56:75:8"
-				},
-				{
-					attributes: {
-						anonymous: false,
-						documentation: null,
-						name: "Transfer"
-					},
-					children: [
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										indexed: true,
-										name: "from",
-										scope: 1965,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 1958,
-											name: "ElementaryTypeName",
-											src: "151:7:8"
-										}
-									],
-									id: 1959,
-									name: "VariableDeclaration",
-									src: "151:20:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										indexed: true,
-										name: "to",
-										scope: 1965,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 1960,
-											name: "ElementaryTypeName",
-											src: "173:7:8"
-										}
-									],
-									id: 1961,
-									name: "VariableDeclaration",
-									src: "173:18:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										indexed: false,
-										name: "value",
-										scope: 1965,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 1962,
-											name: "ElementaryTypeName",
-											src: "193:4:8"
-										}
-									],
-									id: 1963,
-									name: "VariableDeclaration",
-									src: "193:10:8"
-								}
-							],
-							id: 1964,
-							name: "ParameterList",
-							src: "150:54:8"
-						}
-					],
-					id: 1965,
-					name: "EventDefinition",
-					src: "136:69:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "name",
-						scope: 2189,
-						stateMutability: "pure",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 1966,
-							name: "ParameterList",
-							src: "224:2:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 1970,
-										stateVariable: false,
-										storageLocation: "memory",
-										type: "string",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "string",
-												type: "string"
-											},
-											id: 1967,
-											name: "ElementaryTypeName",
-											src: "250:6:8"
-										}
-									],
-									id: 1968,
-									name: "VariableDeclaration",
-									src: "250:13:8"
-								}
-							],
-							id: 1969,
-							name: "ParameterList",
-							src: "249:15:8"
-						}
-					],
-					id: 1970,
-					name: "FunctionDefinition",
-					src: "211:54:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "symbol",
-						scope: 2189,
-						stateMutability: "pure",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 1971,
-							name: "ParameterList",
-							src: "285:2:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 1975,
-										stateVariable: false,
-										storageLocation: "memory",
-										type: "string",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "string",
-												type: "string"
-											},
-											id: 1972,
-											name: "ElementaryTypeName",
-											src: "311:6:8"
-										}
-									],
-									id: 1973,
-									name: "VariableDeclaration",
-									src: "311:13:8"
-								}
-							],
-							id: 1974,
-							name: "ParameterList",
-							src: "310:15:8"
-						}
-					],
-					id: 1975,
-					name: "FunctionDefinition",
-					src: "270:56:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "decimals",
-						scope: 2189,
-						stateMutability: "pure",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 1976,
-							name: "ParameterList",
-							src: "348:2:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 1980,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint8",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint8",
-												type: "uint8"
-											},
-											id: 1977,
-											name: "ElementaryTypeName",
-											src: "374:5:8"
-										}
-									],
-									id: 1978,
-									name: "VariableDeclaration",
-									src: "374:5:8"
-								}
-							],
-							id: 1979,
-							name: "ParameterList",
-							src: "373:7:8"
-						}
-					],
-					id: 1980,
-					name: "FunctionDefinition",
-					src: "331:50:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "totalSupply",
-						scope: 2189,
-						stateMutability: "view",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 1981,
-							name: "ParameterList",
-							src: "406:2:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 1985,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 1982,
-											name: "ElementaryTypeName",
-											src: "432:4:8"
-										}
-									],
-									id: 1983,
-									name: "VariableDeclaration",
-									src: "432:4:8"
-								}
-							],
-							id: 1984,
-							name: "ParameterList",
-							src: "431:6:8"
-						}
-					],
-					id: 1985,
-					name: "FunctionDefinition",
-					src: "386:52:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "balanceOf",
-						scope: 2189,
-						stateMutability: "view",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "owner",
-										scope: 1992,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 1986,
-											name: "ElementaryTypeName",
-											src: "462:7:8"
-										}
-									],
-									id: 1987,
-									name: "VariableDeclaration",
-									src: "462:13:8"
-								}
-							],
-							id: 1988,
-							name: "ParameterList",
-							src: "461:15:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 1992,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 1989,
-											name: "ElementaryTypeName",
-											src: "500:4:8"
-										}
-									],
-									id: 1990,
-									name: "VariableDeclaration",
-									src: "500:4:8"
-								}
-							],
-							id: 1991,
-							name: "ParameterList",
-							src: "499:6:8"
-						}
-					],
-					id: 1992,
-					name: "FunctionDefinition",
-					src: "443:63:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "allowance",
-						scope: 2189,
-						stateMutability: "view",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "owner",
-										scope: 2001,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 1993,
-											name: "ElementaryTypeName",
-											src: "530:7:8"
-										}
-									],
-									id: 1994,
-									name: "VariableDeclaration",
-									src: "530:13:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "spender",
-										scope: 2001,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 1995,
-											name: "ElementaryTypeName",
-											src: "545:7:8"
-										}
-									],
-									id: 1996,
-									name: "VariableDeclaration",
-									src: "545:15:8"
-								}
-							],
-							id: 1997,
-							name: "ParameterList",
-							src: "529:32:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 2001,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 1998,
-											name: "ElementaryTypeName",
-											src: "585:4:8"
-										}
-									],
-									id: 1999,
-									name: "VariableDeclaration",
-									src: "585:4:8"
-								}
-							],
-							id: 2000,
-							name: "ParameterList",
-							src: "584:6:8"
-						}
-					],
-					id: 2001,
-					name: "FunctionDefinition",
-					src: "511:80:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "approve",
-						scope: 2189,
-						stateMutability: "nonpayable",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "spender",
-										scope: 2010,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 2002,
-											name: "ElementaryTypeName",
-											src: "614:7:8"
-										}
-									],
-									id: 2003,
-									name: "VariableDeclaration",
-									src: "614:15:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "value",
-										scope: 2010,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2004,
-											name: "ElementaryTypeName",
-											src: "631:4:8"
-										}
-									],
-									id: 2005,
-									name: "VariableDeclaration",
-									src: "631:10:8"
-								}
-							],
-							id: 2006,
-							name: "ParameterList",
-							src: "613:29:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 2010,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "bool",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "bool",
-												type: "bool"
-											},
-											id: 2007,
-											name: "ElementaryTypeName",
-											src: "661:4:8"
-										}
-									],
-									id: 2008,
-									name: "VariableDeclaration",
-									src: "661:4:8"
-								}
-							],
-							id: 2009,
-							name: "ParameterList",
-							src: "660:6:8"
-						}
-					],
-					id: 2010,
-					name: "FunctionDefinition",
-					src: "597:70:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "transfer",
-						scope: 2189,
-						stateMutability: "nonpayable",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "to",
-										scope: 2019,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 2011,
-											name: "ElementaryTypeName",
-											src: "690:7:8"
-										}
-									],
-									id: 2012,
-									name: "VariableDeclaration",
-									src: "690:10:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "value",
-										scope: 2019,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2013,
-											name: "ElementaryTypeName",
-											src: "702:4:8"
-										}
-									],
-									id: 2014,
-									name: "VariableDeclaration",
-									src: "702:10:8"
-								}
-							],
-							id: 2015,
-							name: "ParameterList",
-							src: "689:24:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 2019,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "bool",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "bool",
-												type: "bool"
-											},
-											id: 2016,
-											name: "ElementaryTypeName",
-											src: "732:4:8"
-										}
-									],
-									id: 2017,
-									name: "VariableDeclaration",
-									src: "732:4:8"
-								}
-							],
-							id: 2018,
-							name: "ParameterList",
-							src: "731:6:8"
-						}
-					],
-					id: 2019,
-					name: "FunctionDefinition",
-					src: "672:66:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "transferFrom",
-						scope: 2189,
-						stateMutability: "nonpayable",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "from",
-										scope: 2030,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 2020,
-											name: "ElementaryTypeName",
-											src: "765:7:8"
-										}
-									],
-									id: 2021,
-									name: "VariableDeclaration",
-									src: "765:12:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "to",
-										scope: 2030,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 2022,
-											name: "ElementaryTypeName",
-											src: "779:7:8"
-										}
-									],
-									id: 2023,
-									name: "VariableDeclaration",
-									src: "779:10:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "value",
-										scope: 2030,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2024,
-											name: "ElementaryTypeName",
-											src: "791:4:8"
-										}
-									],
-									id: 2025,
-									name: "VariableDeclaration",
-									src: "791:10:8"
-								}
-							],
-							id: 2026,
-							name: "ParameterList",
-							src: "764:38:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 2030,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "bool",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "bool",
-												type: "bool"
-											},
-											id: 2027,
-											name: "ElementaryTypeName",
-											src: "821:4:8"
-										}
-									],
-									id: 2028,
-									name: "VariableDeclaration",
-									src: "821:4:8"
-								}
-							],
-							id: 2029,
-							name: "ParameterList",
-							src: "820:6:8"
-						}
-					],
-					id: 2030,
-					name: "FunctionDefinition",
-					src: "743:84:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "DOMAIN_SEPARATOR",
-						scope: 2189,
-						stateMutability: "view",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 2031,
-							name: "ParameterList",
-							src: "858:2:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 2035,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "bytes32",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "bytes32",
-												type: "bytes32"
-											},
-											id: 2032,
-											name: "ElementaryTypeName",
-											src: "884:7:8"
-										}
-									],
-									id: 2033,
-									name: "VariableDeclaration",
-									src: "884:7:8"
-								}
-							],
-							id: 2034,
-							name: "ParameterList",
-							src: "883:9:8"
-						}
-					],
-					id: 2035,
-					name: "FunctionDefinition",
-					src: "833:60:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "PERMIT_TYPEHASH",
-						scope: 2189,
-						stateMutability: "pure",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 2036,
-							name: "ParameterList",
-							src: "922:2:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 2040,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "bytes32",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "bytes32",
-												type: "bytes32"
-											},
-											id: 2037,
-											name: "ElementaryTypeName",
-											src: "948:7:8"
-										}
-									],
-									id: 2038,
-									name: "VariableDeclaration",
-									src: "948:7:8"
-								}
-							],
-							id: 2039,
-							name: "ParameterList",
-							src: "947:9:8"
-						}
-					],
-					id: 2040,
-					name: "FunctionDefinition",
-					src: "898:59:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "nonces",
-						scope: 2189,
-						stateMutability: "view",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "owner",
-										scope: 2047,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 2041,
-											name: "ElementaryTypeName",
-											src: "978:7:8"
-										}
-									],
-									id: 2042,
-									name: "VariableDeclaration",
-									src: "978:13:8"
-								}
-							],
-							id: 2043,
-							name: "ParameterList",
-							src: "977:15:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 2047,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2044,
-											name: "ElementaryTypeName",
-											src: "1016:4:8"
-										}
-									],
-									id: 2045,
-									name: "VariableDeclaration",
-									src: "1016:4:8"
-								}
-							],
-							id: 2046,
-							name: "ParameterList",
-							src: "1015:6:8"
-						}
-					],
-					id: 2047,
-					name: "FunctionDefinition",
-					src: "962:60:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "permit",
-						scope: 2189,
-						stateMutability: "nonpayable",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "owner",
-										scope: 2064,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 2048,
-											name: "ElementaryTypeName",
-											src: "1044:7:8"
-										}
-									],
-									id: 2049,
-									name: "VariableDeclaration",
-									src: "1044:13:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "spender",
-										scope: 2064,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 2050,
-											name: "ElementaryTypeName",
-											src: "1059:7:8"
-										}
-									],
-									id: 2051,
-									name: "VariableDeclaration",
-									src: "1059:15:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "value",
-										scope: 2064,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2052,
-											name: "ElementaryTypeName",
-											src: "1076:4:8"
-										}
-									],
-									id: 2053,
-									name: "VariableDeclaration",
-									src: "1076:10:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "deadline",
-										scope: 2064,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2054,
-											name: "ElementaryTypeName",
-											src: "1088:4:8"
-										}
-									],
-									id: 2055,
-									name: "VariableDeclaration",
-									src: "1088:13:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "v",
-										scope: 2064,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint8",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint8",
-												type: "uint8"
-											},
-											id: 2056,
-											name: "ElementaryTypeName",
-											src: "1103:5:8"
-										}
-									],
-									id: 2057,
-									name: "VariableDeclaration",
-									src: "1103:7:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "r",
-										scope: 2064,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "bytes32",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "bytes32",
-												type: "bytes32"
-											},
-											id: 2058,
-											name: "ElementaryTypeName",
-											src: "1112:7:8"
-										}
-									],
-									id: 2059,
-									name: "VariableDeclaration",
-									src: "1112:9:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "s",
-										scope: 2064,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "bytes32",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "bytes32",
-												type: "bytes32"
-											},
-											id: 2060,
-											name: "ElementaryTypeName",
-											src: "1123:7:8"
-										}
-									],
-									id: 2061,
-									name: "VariableDeclaration",
-									src: "1123:9:8"
-								}
-							],
-							id: 2062,
-							name: "ParameterList",
-							src: "1043:90:8"
-						},
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 2063,
-							name: "ParameterList",
-							src: "1142:0:8"
-						}
-					],
-					id: 2064,
-					name: "FunctionDefinition",
-					src: "1028:115:8"
-				},
-				{
-					attributes: {
-						anonymous: false,
-						documentation: null,
-						name: "Mint"
-					},
-					children: [
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										indexed: true,
-										name: "sender",
-										scope: 2072,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 2065,
-											name: "ElementaryTypeName",
-											src: "1160:7:8"
-										}
-									],
-									id: 2066,
-									name: "VariableDeclaration",
-									src: "1160:22:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										indexed: false,
-										name: "amount0",
-										scope: 2072,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2067,
-											name: "ElementaryTypeName",
-											src: "1184:4:8"
-										}
-									],
-									id: 2068,
-									name: "VariableDeclaration",
-									src: "1184:12:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										indexed: false,
-										name: "amount1",
-										scope: 2072,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2069,
-											name: "ElementaryTypeName",
-											src: "1198:4:8"
-										}
-									],
-									id: 2070,
-									name: "VariableDeclaration",
-									src: "1198:12:8"
-								}
-							],
-							id: 2071,
-							name: "ParameterList",
-							src: "1159:52:8"
-						}
-					],
-					id: 2072,
-					name: "EventDefinition",
-					src: "1149:63:8"
-				},
-				{
-					attributes: {
-						anonymous: false,
-						documentation: null,
-						name: "Burn"
-					},
-					children: [
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										indexed: true,
-										name: "sender",
-										scope: 2082,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 2073,
-											name: "ElementaryTypeName",
-											src: "1228:7:8"
-										}
-									],
-									id: 2074,
-									name: "VariableDeclaration",
-									src: "1228:22:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										indexed: false,
-										name: "amount0",
-										scope: 2082,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2075,
-											name: "ElementaryTypeName",
-											src: "1252:4:8"
-										}
-									],
-									id: 2076,
-									name: "VariableDeclaration",
-									src: "1252:12:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										indexed: false,
-										name: "amount1",
-										scope: 2082,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2077,
-											name: "ElementaryTypeName",
-											src: "1266:4:8"
-										}
-									],
-									id: 2078,
-									name: "VariableDeclaration",
-									src: "1266:12:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										indexed: true,
-										name: "to",
-										scope: 2082,
+										scope: 2086,
 										stateVariable: false,
 										storageLocation: "default",
 										type: "address",
@@ -6834,38 +5374,19 @@ var legacyAST = {
 											},
 											id: 2079,
 											name: "ElementaryTypeName",
-											src: "1280:7:8"
+											src: "70:7:9"
 										}
 									],
 									id: 2080,
 									name: "VariableDeclaration",
-									src: "1280:18:8"
-								}
-							],
-							id: 2081,
-							name: "ParameterList",
-							src: "1227:72:8"
-						}
-					],
-					id: 2082,
-					name: "EventDefinition",
-					src: "1217:83:8"
-				},
-				{
-					attributes: {
-						anonymous: false,
-						documentation: null,
-						name: "Swap"
-					},
-					children: [
-						{
-							children: [
+									src: "70:21:9"
+								},
 								{
 									attributes: {
 										constant: false,
 										indexed: true,
-										name: "sender",
-										scope: 2096,
+										name: "spender",
+										scope: 2086,
 										stateVariable: false,
 										storageLocation: "default",
 										type: "address",
@@ -6879,102 +5400,123 @@ var legacyAST = {
 												stateMutability: "nonpayable",
 												type: "address"
 											},
+											id: 2081,
+											name: "ElementaryTypeName",
+											src: "93:7:9"
+										}
+									],
+									id: 2082,
+									name: "VariableDeclaration",
+									src: "93:23:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										indexed: false,
+										name: "value",
+										scope: 2086,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
 											id: 2083,
 											name: "ElementaryTypeName",
-											src: "1325:7:8"
+											src: "118:4:9"
 										}
 									],
 									id: 2084,
 									name: "VariableDeclaration",
-									src: "1325:22:8"
-								},
+									src: "118:10:9"
+								}
+							],
+							id: 2085,
+							name: "ParameterList",
+							src: "69:60:9"
+						}
+					],
+					id: 2086,
+					name: "EventDefinition",
+					src: "55:75:9"
+				},
+				{
+					attributes: {
+						anonymous: false,
+						documentation: null,
+						name: "Transfer"
+					},
+					children: [
+						{
+							children: [
 								{
 									attributes: {
 										constant: false,
-										indexed: false,
-										name: "amount0In",
-										scope: 2096,
+										indexed: true,
+										name: "from",
+										scope: 2094,
 										stateVariable: false,
 										storageLocation: "default",
-										type: "uint256",
+										type: "address",
 										value: null,
 										visibility: "internal"
 									},
 									children: [
 										{
 											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2085,
-											name: "ElementaryTypeName",
-											src: "1357:4:8"
-										}
-									],
-									id: 2086,
-									name: "VariableDeclaration",
-									src: "1357:14:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										indexed: false,
-										name: "amount1In",
-										scope: 2096,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
 											},
 											id: 2087,
 											name: "ElementaryTypeName",
-											src: "1381:4:8"
+											src: "150:7:9"
 										}
 									],
 									id: 2088,
 									name: "VariableDeclaration",
-									src: "1381:14:8"
+									src: "150:20:9"
 								},
 								{
 									attributes: {
 										constant: false,
-										indexed: false,
-										name: "amount0Out",
-										scope: 2096,
+										indexed: true,
+										name: "to",
+										scope: 2094,
 										stateVariable: false,
 										storageLocation: "default",
-										type: "uint256",
+										type: "address",
 										value: null,
 										visibility: "internal"
 									},
 									children: [
 										{
 											attributes: {
-												name: "uint",
-												type: "uint256"
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
 											},
 											id: 2089,
 											name: "ElementaryTypeName",
-											src: "1405:4:8"
+											src: "172:7:9"
 										}
 									],
 									id: 2090,
 									name: "VariableDeclaration",
-									src: "1405:15:8"
+									src: "172:18:9"
 								},
 								{
 									attributes: {
 										constant: false,
 										indexed: false,
-										name: "amount1Out",
-										scope: 2096,
+										name: "value",
+										scope: 2094,
 										stateVariable: false,
 										storageLocation: "default",
 										type: "uint256",
@@ -6989,19 +5531,59 @@ var legacyAST = {
 											},
 											id: 2091,
 											name: "ElementaryTypeName",
-											src: "1430:4:8"
+											src: "192:4:9"
 										}
 									],
 									id: 2092,
 									name: "VariableDeclaration",
-									src: "1430:15:8"
-								},
+									src: "192:10:9"
+								}
+							],
+							id: 2093,
+							name: "ParameterList",
+							src: "149:54:9"
+						}
+					],
+					id: 2094,
+					name: "EventDefinition",
+					src: "135:69:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "baseToken",
+						scope: 2332,
+						stateMutability: "view",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2095,
+							name: "ParameterList",
+							src: "228:2:9"
+						},
+						{
+							children: [
 								{
 									attributes: {
 										constant: false,
-										indexed: true,
-										name: "to",
-										scope: 2096,
+										name: "",
+										scope: 2099,
 										stateVariable: false,
 										storageLocation: "default",
 										type: "address",
@@ -7015,97 +5597,24 @@ var legacyAST = {
 												stateMutability: "nonpayable",
 												type: "address"
 											},
-											id: 2093,
+											id: 2096,
 											name: "ElementaryTypeName",
-											src: "1455:7:8"
+											src: "254:7:9"
 										}
 									],
-									id: 2094,
+									id: 2097,
 									name: "VariableDeclaration",
-									src: "1455:18:8"
+									src: "254:7:9"
 								}
 							],
-							id: 2095,
+							id: 2098,
 							name: "ParameterList",
-							src: "1315:164:8"
+							src: "253:9:9"
 						}
 					],
-					id: 2096,
-					name: "EventDefinition",
-					src: "1305:175:8"
-				},
-				{
-					attributes: {
-						anonymous: false,
-						documentation: null,
-						name: "Sync"
-					},
-					children: [
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										indexed: false,
-										name: "reserve0",
-										scope: 2102,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint112",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint112",
-												type: "uint112"
-											},
-											id: 2097,
-											name: "ElementaryTypeName",
-											src: "1496:7:8"
-										}
-									],
-									id: 2098,
-									name: "VariableDeclaration",
-									src: "1496:16:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										indexed: false,
-										name: "reserve1",
-										scope: 2102,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint112",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint112",
-												type: "uint112"
-											},
-											id: 2099,
-											name: "ElementaryTypeName",
-											src: "1514:7:8"
-										}
-									],
-									id: 2100,
-									name: "VariableDeclaration",
-									src: "1514:16:8"
-								}
-							],
-							id: 2101,
-							name: "ParameterList",
-							src: "1495:36:8"
-						}
-					],
-					id: 2102,
-					name: "EventDefinition",
-					src: "1485:47:8"
+					id: 2099,
+					name: "FunctionDefinition",
+					src: "210:53:9"
 				},
 				{
 					attributes: {
@@ -7117,8 +5626,8 @@ var legacyAST = {
 						modifiers: [
 							null
 						],
-						name: "MINIMUM_LIQUIDITY",
-						scope: 2189,
+						name: "name",
+						scope: 2332,
 						stateMutability: "pure",
 						superFunction: null,
 						visibility: "external"
@@ -7132,9 +5641,9 @@ var legacyAST = {
 							},
 							children: [
 							],
-							id: 2103,
+							id: 2100,
 							name: "ParameterList",
-							src: "1564:2:8"
+							src: "281:2:9"
 						},
 						{
 							children: [
@@ -7142,37 +5651,37 @@ var legacyAST = {
 									attributes: {
 										constant: false,
 										name: "",
-										scope: 2107,
+										scope: 2104,
 										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
+										storageLocation: "memory",
+										type: "string",
 										value: null,
 										visibility: "internal"
 									},
 									children: [
 										{
 											attributes: {
-												name: "uint",
-												type: "uint256"
+												name: "string",
+												type: "string"
 											},
-											id: 2104,
+											id: 2101,
 											name: "ElementaryTypeName",
-											src: "1590:4:8"
+											src: "307:6:9"
 										}
 									],
-									id: 2105,
+									id: 2102,
 									name: "VariableDeclaration",
-									src: "1590:4:8"
+									src: "307:13:9"
 								}
 							],
-							id: 2106,
+							id: 2103,
 							name: "ParameterList",
-							src: "1589:6:8"
+							src: "306:15:9"
 						}
 					],
-					id: 2107,
+					id: 2104,
 					name: "FunctionDefinition",
-					src: "1538:58:8"
+					src: "268:54:9"
 				},
 				{
 					attributes: {
@@ -7184,9 +5693,9 @@ var legacyAST = {
 						modifiers: [
 							null
 						],
-						name: "factory",
-						scope: 2189,
-						stateMutability: "view",
+						name: "symbol",
+						scope: 2332,
+						stateMutability: "pure",
 						superFunction: null,
 						visibility: "external"
 					},
@@ -7198,49 +5707,48 @@ var legacyAST = {
 								]
 							},
 							children: [
+							],
+							id: 2105,
+							name: "ParameterList",
+							src: "342:2:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2109,
+										stateVariable: false,
+										storageLocation: "memory",
+										type: "string",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "string",
+												type: "string"
+											},
+											id: 2106,
+											name: "ElementaryTypeName",
+											src: "368:6:9"
+										}
+									],
+									id: 2107,
+									name: "VariableDeclaration",
+									src: "368:13:9"
+								}
 							],
 							id: 2108,
 							name: "ParameterList",
-							src: "1617:2:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 2112,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 2109,
-											name: "ElementaryTypeName",
-											src: "1643:7:8"
-										}
-									],
-									id: 2110,
-									name: "VariableDeclaration",
-									src: "1643:7:8"
-								}
-							],
-							id: 2111,
-							name: "ParameterList",
-							src: "1642:9:8"
+							src: "367:15:9"
 						}
 					],
-					id: 2112,
+					id: 2109,
 					name: "FunctionDefinition",
-					src: "1601:51:8"
+					src: "327:56:9"
 				},
 				{
 					attributes: {
@@ -7252,9 +5760,9 @@ var legacyAST = {
 						modifiers: [
 							null
 						],
-						name: "token0",
-						scope: 2189,
-						stateMutability: "view",
+						name: "decimals",
+						scope: 2332,
+						stateMutability: "pure",
 						superFunction: null,
 						visibility: "external"
 					},
@@ -7266,49 +5774,48 @@ var legacyAST = {
 								]
 							},
 							children: [
+							],
+							id: 2110,
+							name: "ParameterList",
+							src: "405:2:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2114,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint8",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint8",
+												type: "uint8"
+											},
+											id: 2111,
+											name: "ElementaryTypeName",
+											src: "431:5:9"
+										}
+									],
+									id: 2112,
+									name: "VariableDeclaration",
+									src: "431:5:9"
+								}
 							],
 							id: 2113,
 							name: "ParameterList",
-							src: "1672:2:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 2117,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 2114,
-											name: "ElementaryTypeName",
-											src: "1698:7:8"
-										}
-									],
-									id: 2115,
-									name: "VariableDeclaration",
-									src: "1698:7:8"
-								}
-							],
-							id: 2116,
-							name: "ParameterList",
-							src: "1697:9:8"
+							src: "430:7:9"
 						}
 					],
-					id: 2117,
+					id: 2114,
 					name: "FunctionDefinition",
-					src: "1657:50:8"
+					src: "388:50:9"
 				},
 				{
 					attributes: {
@@ -7320,8 +5827,8 @@ var legacyAST = {
 						modifiers: [
 							null
 						],
-						name: "token1",
-						scope: 2189,
+						name: "totalSupply",
+						scope: 2332,
 						stateMutability: "view",
 						superFunction: null,
 						visibility: "external"
@@ -7335,9 +5842,9 @@ var legacyAST = {
 							},
 							children: [
 							],
-							id: 2118,
+							id: 2115,
 							name: "ParameterList",
-							src: "1727:2:8"
+							src: "463:2:9"
 						},
 						{
 							children: [
@@ -7345,194 +5852,7 @@ var legacyAST = {
 									attributes: {
 										constant: false,
 										name: "",
-										scope: 2122,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "address",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
-											},
-											id: 2119,
-											name: "ElementaryTypeName",
-											src: "1753:7:8"
-										}
-									],
-									id: 2120,
-									name: "VariableDeclaration",
-									src: "1753:7:8"
-								}
-							],
-							id: 2121,
-							name: "ParameterList",
-							src: "1752:9:8"
-						}
-					],
-					id: 2122,
-					name: "FunctionDefinition",
-					src: "1712:50:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "getReserves",
-						scope: 2189,
-						stateMutability: "view",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 2123,
-							name: "ParameterList",
-							src: "1787:2:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "reserve0",
-										scope: 2131,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint112",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint112",
-												type: "uint112"
-											},
-											id: 2124,
-											name: "ElementaryTypeName",
-											src: "1813:7:8"
-										}
-									],
-									id: 2125,
-									name: "VariableDeclaration",
-									src: "1813:16:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "reserve1",
-										scope: 2131,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint112",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint112",
-												type: "uint112"
-											},
-											id: 2126,
-											name: "ElementaryTypeName",
-											src: "1831:7:8"
-										}
-									],
-									id: 2127,
-									name: "VariableDeclaration",
-									src: "1831:16:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "blockTimestampLast",
-										scope: 2131,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint32",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint32",
-												type: "uint32"
-											},
-											id: 2128,
-											name: "ElementaryTypeName",
-											src: "1849:6:8"
-										}
-									],
-									id: 2129,
-									name: "VariableDeclaration",
-									src: "1849:25:8"
-								}
-							],
-							id: 2130,
-							name: "ParameterList",
-							src: "1812:63:8"
-						}
-					],
-					id: 2131,
-					name: "FunctionDefinition",
-					src: "1767:109:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "price0CumulativeLast",
-						scope: 2189,
-						stateMutability: "view",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 2132,
-							name: "ParameterList",
-							src: "1910:2:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "",
-										scope: 2136,
+										scope: 2119,
 										stateVariable: false,
 										storageLocation: "default",
 										type: "uint256",
@@ -7545,24 +5865,24 @@ var legacyAST = {
 												name: "uint",
 												type: "uint256"
 											},
-											id: 2133,
+											id: 2116,
 											name: "ElementaryTypeName",
-											src: "1936:4:8"
+											src: "489:4:9"
 										}
 									],
-									id: 2134,
+									id: 2117,
 									name: "VariableDeclaration",
-									src: "1936:4:8"
+									src: "489:4:9"
 								}
 							],
-							id: 2135,
+							id: 2118,
 							name: "ParameterList",
-							src: "1935:6:8"
+							src: "488:6:9"
 						}
 					],
-					id: 2136,
+					id: 2119,
 					name: "FunctionDefinition",
-					src: "1881:61:8"
+					src: "443:52:9"
 				},
 				{
 					attributes: {
@@ -7574,24 +5894,46 @@ var legacyAST = {
 						modifiers: [
 							null
 						],
-						name: "price1CumulativeLast",
-						scope: 2189,
+						name: "balanceOf",
+						scope: 2332,
 						stateMutability: "view",
 						superFunction: null,
 						visibility: "external"
 					},
 					children: [
 						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
 							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "owner",
+										scope: 2126,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2120,
+											name: "ElementaryTypeName",
+											src: "519:7:9"
+										}
+									],
+									id: 2121,
+									name: "VariableDeclaration",
+									src: "519:13:9"
+								}
 							],
-							id: 2137,
+							id: 2122,
 							name: "ParameterList",
-							src: "1976:2:8"
+							src: "518:15:9"
 						},
 						{
 							children: [
@@ -7599,7 +5941,205 @@ var legacyAST = {
 									attributes: {
 										constant: false,
 										name: "",
-										scope: 2141,
+										scope: 2126,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2123,
+											name: "ElementaryTypeName",
+											src: "557:4:9"
+										}
+									],
+									id: 2124,
+									name: "VariableDeclaration",
+									src: "557:4:9"
+								}
+							],
+							id: 2125,
+							name: "ParameterList",
+							src: "556:6:9"
+						}
+					],
+					id: 2126,
+					name: "FunctionDefinition",
+					src: "500:63:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "allowance",
+						scope: 2332,
+						stateMutability: "view",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "owner",
+										scope: 2135,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2127,
+											name: "ElementaryTypeName",
+											src: "587:7:9"
+										}
+									],
+									id: 2128,
+									name: "VariableDeclaration",
+									src: "587:13:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "spender",
+										scope: 2135,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2129,
+											name: "ElementaryTypeName",
+											src: "602:7:9"
+										}
+									],
+									id: 2130,
+									name: "VariableDeclaration",
+									src: "602:15:9"
+								}
+							],
+							id: 2131,
+							name: "ParameterList",
+							src: "586:32:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2135,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2132,
+											name: "ElementaryTypeName",
+											src: "642:4:9"
+										}
+									],
+									id: 2133,
+									name: "VariableDeclaration",
+									src: "642:4:9"
+								}
+							],
+							id: 2134,
+							name: "ParameterList",
+							src: "641:6:9"
+						}
+					],
+					id: 2135,
+					name: "FunctionDefinition",
+					src: "568:80:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "approve",
+						scope: 2332,
+						stateMutability: "nonpayable",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "spender",
+										scope: 2144,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2136,
+											name: "ElementaryTypeName",
+											src: "671:7:9"
+										}
+									],
+									id: 2137,
+									name: "VariableDeclaration",
+									src: "671:15:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "value",
+										scope: 2144,
 										stateVariable: false,
 										storageLocation: "default",
 										type: "uint256",
@@ -7614,51 +6154,17 @@ var legacyAST = {
 											},
 											id: 2138,
 											name: "ElementaryTypeName",
-											src: "2002:4:8"
+											src: "688:4:9"
 										}
 									],
 									id: 2139,
 									name: "VariableDeclaration",
-									src: "2002:4:8"
+									src: "688:10:9"
 								}
 							],
 							id: 2140,
 							name: "ParameterList",
-							src: "2001:6:8"
-						}
-					],
-					id: 2141,
-					name: "FunctionDefinition",
-					src: "1947:61:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "kLast",
-						scope: 2189,
-						stateMutability: "view",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 2142,
-							name: "ParameterList",
-							src: "2027:2:8"
+							src: "670:29:9"
 						},
 						{
 							children: [
@@ -7666,37 +6172,37 @@ var legacyAST = {
 									attributes: {
 										constant: false,
 										name: "",
-										scope: 2146,
+										scope: 2144,
 										stateVariable: false,
 										storageLocation: "default",
-										type: "uint256",
+										type: "bool",
 										value: null,
 										visibility: "internal"
 									},
 									children: [
 										{
 											attributes: {
-												name: "uint",
-												type: "uint256"
+												name: "bool",
+												type: "bool"
 											},
-											id: 2143,
+											id: 2141,
 											name: "ElementaryTypeName",
-											src: "2053:4:8"
+											src: "718:4:9"
 										}
 									],
-									id: 2144,
+									id: 2142,
 									name: "VariableDeclaration",
-									src: "2053:4:8"
+									src: "718:4:9"
 								}
 							],
-							id: 2145,
+							id: 2143,
 							name: "ParameterList",
-							src: "2052:6:8"
+							src: "717:6:9"
 						}
 					],
-					id: 2146,
+					id: 2144,
 					name: "FunctionDefinition",
-					src: "2013:46:8"
+					src: "654:70:9"
 				},
 				{
 					attributes: {
@@ -7708,8 +6214,8 @@ var legacyAST = {
 						modifiers: [
 							null
 						],
-						name: "mint",
-						scope: 2189,
+						name: "transfer",
+						scope: 2332,
 						stateMutability: "nonpayable",
 						superFunction: null,
 						visibility: "external"
@@ -7735,26 +6241,19 @@ var legacyAST = {
 												stateMutability: "nonpayable",
 												type: "address"
 											},
-											id: 2147,
+											id: 2145,
 											name: "ElementaryTypeName",
-											src: "2079:7:8"
+											src: "747:7:9"
 										}
 									],
-									id: 2148,
+									id: 2146,
 									name: "VariableDeclaration",
-									src: "2079:10:8"
-								}
-							],
-							id: 2149,
-							name: "ParameterList",
-							src: "2078:12:8"
-						},
-						{
-							children: [
+									src: "747:10:9"
+								},
 								{
 									attributes: {
 										constant: false,
-										name: "liquidity",
+										name: "value",
 										scope: 2153,
 										stateVariable: false,
 										storageLocation: "default",
@@ -7768,24 +6267,57 @@ var legacyAST = {
 												name: "uint",
 												type: "uint256"
 											},
+											id: 2147,
+											name: "ElementaryTypeName",
+											src: "759:4:9"
+										}
+									],
+									id: 2148,
+									name: "VariableDeclaration",
+									src: "759:10:9"
+								}
+							],
+							id: 2149,
+							name: "ParameterList",
+							src: "746:24:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2153,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "bool",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "bool",
+												type: "bool"
+											},
 											id: 2150,
 											name: "ElementaryTypeName",
-											src: "2109:4:8"
+											src: "789:4:9"
 										}
 									],
 									id: 2151,
 									name: "VariableDeclaration",
-									src: "2109:14:8"
+									src: "789:4:9"
 								}
 							],
 							id: 2152,
 							name: "ParameterList",
-							src: "2108:16:8"
+							src: "788:6:9"
 						}
 					],
 					id: 2153,
 					name: "FunctionDefinition",
-					src: "2065:60:8"
+					src: "729:66:9"
 				},
 				{
 					attributes: {
@@ -7797,8 +6329,8 @@ var legacyAST = {
 						modifiers: [
 							null
 						],
-						name: "burn",
-						scope: 2189,
+						name: "transferFrom",
+						scope: 2332,
 						stateMutability: "nonpayable",
 						superFunction: null,
 						visibility: "external"
@@ -7809,8 +6341,8 @@ var legacyAST = {
 								{
 									attributes: {
 										constant: false,
-										name: "to",
-										scope: 2162,
+										name: "from",
+										scope: 2164,
 										stateVariable: false,
 										storageLocation: "default",
 										type: "address",
@@ -7826,158 +6358,18 @@ var legacyAST = {
 											},
 											id: 2154,
 											name: "ElementaryTypeName",
-											src: "2144:7:8"
+											src: "822:7:9"
 										}
 									],
 									id: 2155,
 									name: "VariableDeclaration",
-									src: "2144:10:8"
-								}
-							],
-							id: 2156,
-							name: "ParameterList",
-							src: "2143:12:8"
-						},
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "amount0",
-										scope: 2162,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2157,
-											name: "ElementaryTypeName",
-											src: "2174:4:8"
-										}
-									],
-									id: 2158,
-									name: "VariableDeclaration",
-									src: "2174:12:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "amount1",
-										scope: 2162,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2159,
-											name: "ElementaryTypeName",
-											src: "2188:4:8"
-										}
-									],
-									id: 2160,
-									name: "VariableDeclaration",
-									src: "2188:12:8"
-								}
-							],
-							id: 2161,
-							name: "ParameterList",
-							src: "2173:28:8"
-						}
-					],
-					id: 2162,
-					name: "FunctionDefinition",
-					src: "2130:72:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "swap",
-						scope: 2189,
-						stateMutability: "nonpayable",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "amount0Out",
-										scope: 2173,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2163,
-											name: "ElementaryTypeName",
-											src: "2221:4:8"
-										}
-									],
-									id: 2164,
-									name: "VariableDeclaration",
-									src: "2221:15:8"
-								},
-								{
-									attributes: {
-										constant: false,
-										name: "amount1Out",
-										scope: 2173,
-										stateVariable: false,
-										storageLocation: "default",
-										type: "uint256",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "uint",
-												type: "uint256"
-											},
-											id: 2165,
-											name: "ElementaryTypeName",
-											src: "2238:4:8"
-										}
-									],
-									id: 2166,
-									name: "VariableDeclaration",
-									src: "2238:15:8"
+									src: "822:12:9"
 								},
 								{
 									attributes: {
 										constant: false,
 										name: "to",
-										scope: 2173,
+										scope: 2164,
 										stateVariable: false,
 										storageLocation: "default",
 										type: "address",
@@ -7991,201 +6383,331 @@ var legacyAST = {
 												stateMutability: "nonpayable",
 												type: "address"
 											},
-											id: 2167,
+											id: 2156,
 											name: "ElementaryTypeName",
-											src: "2255:7:8"
+											src: "836:7:9"
 										}
 									],
-									id: 2168,
+									id: 2157,
 									name: "VariableDeclaration",
-									src: "2255:10:8"
+									src: "836:10:9"
 								},
 								{
 									attributes: {
 										constant: false,
-										name: "data",
-										scope: 2173,
-										stateVariable: false,
-										storageLocation: "calldata",
-										type: "bytes",
-										value: null,
-										visibility: "internal"
-									},
-									children: [
-										{
-											attributes: {
-												name: "bytes",
-												type: "bytes"
-											},
-											id: 2169,
-											name: "ElementaryTypeName",
-											src: "2267:5:8"
-										}
-									],
-									id: 2170,
-									name: "VariableDeclaration",
-									src: "2267:19:8"
-								}
-							],
-							id: 2171,
-							name: "ParameterList",
-							src: "2220:67:8"
-						},
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 2172,
-							name: "ParameterList",
-							src: "2296:0:8"
-						}
-					],
-					id: 2173,
-					name: "FunctionDefinition",
-					src: "2207:90:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "skim",
-						scope: 2189,
-						stateMutability: "nonpayable",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							children: [
-								{
-									attributes: {
-										constant: false,
-										name: "to",
-										scope: 2178,
+										name: "value",
+										scope: 2164,
 										stateVariable: false,
 										storageLocation: "default",
-										type: "address",
+										type: "uint256",
 										value: null,
 										visibility: "internal"
 									},
 									children: [
 										{
 											attributes: {
-												name: "address",
-												stateMutability: "nonpayable",
-												type: "address"
+												name: "uint",
+												type: "uint256"
 											},
-											id: 2174,
+											id: 2158,
 											name: "ElementaryTypeName",
-											src: "2316:7:8"
+											src: "848:4:9"
 										}
 									],
-									id: 2175,
+									id: 2159,
 									name: "VariableDeclaration",
-									src: "2316:10:8"
+									src: "848:10:9"
 								}
 							],
-							id: 2176,
+							id: 2160,
 							name: "ParameterList",
-							src: "2315:12:8"
+							src: "821:38:9"
 						},
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 2177,
-							name: "ParameterList",
-							src: "2336:0:8"
-						}
-					],
-					id: 2178,
-					name: "FunctionDefinition",
-					src: "2302:35:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "sync",
-						scope: 2189,
-						stateMutability: "nonpayable",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 2179,
-							name: "ParameterList",
-							src: "2355:2:8"
-						},
-						{
-							attributes: {
-								parameters: [
-									null
-								]
-							},
-							children: [
-							],
-							id: 2180,
-							name: "ParameterList",
-							src: "2366:0:8"
-						}
-					],
-					id: 2181,
-					name: "FunctionDefinition",
-					src: "2342:25:8"
-				},
-				{
-					attributes: {
-						body: null,
-						documentation: null,
-						implemented: false,
-						isConstructor: false,
-						kind: "function",
-						modifiers: [
-							null
-						],
-						name: "initialize",
-						scope: 2189,
-						stateMutability: "nonpayable",
-						superFunction: null,
-						visibility: "external"
-					},
-					children: [
 						{
 							children: [
 								{
 									attributes: {
 										constant: false,
 										name: "",
-										scope: 2188,
+										scope: 2164,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "bool",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "bool",
+												type: "bool"
+											},
+											id: 2161,
+											name: "ElementaryTypeName",
+											src: "878:4:9"
+										}
+									],
+									id: 2162,
+									name: "VariableDeclaration",
+									src: "878:4:9"
+								}
+							],
+							id: 2163,
+							name: "ParameterList",
+							src: "877:6:9"
+						}
+					],
+					id: 2164,
+					name: "FunctionDefinition",
+					src: "800:84:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "DOMAIN_SEPARATOR",
+						scope: 2332,
+						stateMutability: "view",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2165,
+							name: "ParameterList",
+							src: "915:2:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2169,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "bytes32",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "bytes32",
+												type: "bytes32"
+											},
+											id: 2166,
+											name: "ElementaryTypeName",
+											src: "941:7:9"
+										}
+									],
+									id: 2167,
+									name: "VariableDeclaration",
+									src: "941:7:9"
+								}
+							],
+							id: 2168,
+							name: "ParameterList",
+							src: "940:9:9"
+						}
+					],
+					id: 2169,
+					name: "FunctionDefinition",
+					src: "890:60:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "PERMIT_TYPEHASH",
+						scope: 2332,
+						stateMutability: "pure",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2170,
+							name: "ParameterList",
+							src: "979:2:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2174,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "bytes32",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "bytes32",
+												type: "bytes32"
+											},
+											id: 2171,
+											name: "ElementaryTypeName",
+											src: "1005:7:9"
+										}
+									],
+									id: 2172,
+									name: "VariableDeclaration",
+									src: "1005:7:9"
+								}
+							],
+							id: 2173,
+							name: "ParameterList",
+							src: "1004:9:9"
+						}
+					],
+					id: 2174,
+					name: "FunctionDefinition",
+					src: "955:59:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "nonces",
+						scope: 2332,
+						stateMutability: "view",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "owner",
+										scope: 2181,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2175,
+											name: "ElementaryTypeName",
+											src: "1035:7:9"
+										}
+									],
+									id: 2176,
+									name: "VariableDeclaration",
+									src: "1035:13:9"
+								}
+							],
+							id: 2177,
+							name: "ParameterList",
+							src: "1034:15:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2181,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2178,
+											name: "ElementaryTypeName",
+											src: "1073:4:9"
+										}
+									],
+									id: 2179,
+									name: "VariableDeclaration",
+									src: "1073:4:9"
+								}
+							],
+							id: 2180,
+							name: "ParameterList",
+							src: "1072:6:9"
+						}
+					],
+					id: 2181,
+					name: "FunctionDefinition",
+					src: "1019:60:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "permit",
+						scope: 2332,
+						stateMutability: "nonpayable",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "owner",
+										scope: 2198,
 										stateVariable: false,
 										storageLocation: "default",
 										type: "address",
@@ -8201,18 +6723,18 @@ var legacyAST = {
 											},
 											id: 2182,
 											name: "ElementaryTypeName",
-											src: "2393:7:8"
+											src: "1101:7:9"
 										}
 									],
 									id: 2183,
 									name: "VariableDeclaration",
-									src: "2393:7:8"
+									src: "1101:13:9"
 								},
 								{
 									attributes: {
 										constant: false,
-										name: "",
-										scope: 2188,
+										name: "spender",
+										scope: 2198,
 										stateVariable: false,
 										storageLocation: "default",
 										type: "address",
@@ -8228,17 +6750,147 @@ var legacyAST = {
 											},
 											id: 2184,
 											name: "ElementaryTypeName",
-											src: "2402:7:8"
+											src: "1116:7:9"
 										}
 									],
 									id: 2185,
 									name: "VariableDeclaration",
-									src: "2402:7:8"
+									src: "1116:15:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "value",
+										scope: 2198,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2186,
+											name: "ElementaryTypeName",
+											src: "1133:4:9"
+										}
+									],
+									id: 2187,
+									name: "VariableDeclaration",
+									src: "1133:10:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "deadline",
+										scope: 2198,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2188,
+											name: "ElementaryTypeName",
+											src: "1145:4:9"
+										}
+									],
+									id: 2189,
+									name: "VariableDeclaration",
+									src: "1145:13:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "v",
+										scope: 2198,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint8",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint8",
+												type: "uint8"
+											},
+											id: 2190,
+											name: "ElementaryTypeName",
+											src: "1160:5:9"
+										}
+									],
+									id: 2191,
+									name: "VariableDeclaration",
+									src: "1160:7:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "r",
+										scope: 2198,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "bytes32",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "bytes32",
+												type: "bytes32"
+											},
+											id: 2192,
+											name: "ElementaryTypeName",
+											src: "1169:7:9"
+										}
+									],
+									id: 2193,
+									name: "VariableDeclaration",
+									src: "1169:9:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "s",
+										scope: 2198,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "bytes32",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "bytes32",
+												type: "bytes32"
+											},
+											id: 2194,
+											name: "ElementaryTypeName",
+											src: "1180:7:9"
+										}
+									],
+									id: 2195,
+									name: "VariableDeclaration",
+									src: "1180:9:9"
 								}
 							],
-							id: 2186,
+							id: 2196,
 							name: "ParameterList",
-							src: "2392:18:8"
+							src: "1100:90:9"
 						},
 						{
 							attributes: {
@@ -8248,24 +6900,1780 @@ var legacyAST = {
 							},
 							children: [
 							],
-							id: 2187,
+							id: 2197,
 							name: "ParameterList",
-							src: "2419:0:8"
+							src: "1199:0:9"
 						}
 					],
-					id: 2188,
+					id: 2198,
 					name: "FunctionDefinition",
-					src: "2373:47:8"
+					src: "1085:115:9"
+				},
+				{
+					attributes: {
+						anonymous: false,
+						documentation: null,
+						name: "Mint"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										indexed: true,
+										name: "sender",
+										scope: 2206,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2199,
+											name: "ElementaryTypeName",
+											src: "1217:7:9"
+										}
+									],
+									id: 2200,
+									name: "VariableDeclaration",
+									src: "1217:22:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										indexed: false,
+										name: "amount0",
+										scope: 2206,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2201,
+											name: "ElementaryTypeName",
+											src: "1241:4:9"
+										}
+									],
+									id: 2202,
+									name: "VariableDeclaration",
+									src: "1241:12:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										indexed: false,
+										name: "amount1",
+										scope: 2206,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2203,
+											name: "ElementaryTypeName",
+											src: "1255:4:9"
+										}
+									],
+									id: 2204,
+									name: "VariableDeclaration",
+									src: "1255:12:9"
+								}
+							],
+							id: 2205,
+							name: "ParameterList",
+							src: "1216:52:9"
+						}
+					],
+					id: 2206,
+					name: "EventDefinition",
+					src: "1206:63:9"
+				},
+				{
+					attributes: {
+						anonymous: false,
+						documentation: null,
+						name: "Burn"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										indexed: true,
+										name: "sender",
+										scope: 2216,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2207,
+											name: "ElementaryTypeName",
+											src: "1285:7:9"
+										}
+									],
+									id: 2208,
+									name: "VariableDeclaration",
+									src: "1285:22:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										indexed: false,
+										name: "amount0",
+										scope: 2216,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2209,
+											name: "ElementaryTypeName",
+											src: "1309:4:9"
+										}
+									],
+									id: 2210,
+									name: "VariableDeclaration",
+									src: "1309:12:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										indexed: false,
+										name: "amount1",
+										scope: 2216,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2211,
+											name: "ElementaryTypeName",
+											src: "1323:4:9"
+										}
+									],
+									id: 2212,
+									name: "VariableDeclaration",
+									src: "1323:12:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										indexed: true,
+										name: "to",
+										scope: 2216,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2213,
+											name: "ElementaryTypeName",
+											src: "1337:7:9"
+										}
+									],
+									id: 2214,
+									name: "VariableDeclaration",
+									src: "1337:18:9"
+								}
+							],
+							id: 2215,
+							name: "ParameterList",
+							src: "1284:72:9"
+						}
+					],
+					id: 2216,
+					name: "EventDefinition",
+					src: "1274:83:9"
+				},
+				{
+					attributes: {
+						anonymous: false,
+						documentation: null,
+						name: "Swap"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										indexed: true,
+										name: "sender",
+										scope: 2230,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2217,
+											name: "ElementaryTypeName",
+											src: "1382:7:9"
+										}
+									],
+									id: 2218,
+									name: "VariableDeclaration",
+									src: "1382:22:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										indexed: false,
+										name: "amount0In",
+										scope: 2230,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2219,
+											name: "ElementaryTypeName",
+											src: "1414:4:9"
+										}
+									],
+									id: 2220,
+									name: "VariableDeclaration",
+									src: "1414:14:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										indexed: false,
+										name: "amount1In",
+										scope: 2230,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2221,
+											name: "ElementaryTypeName",
+											src: "1438:4:9"
+										}
+									],
+									id: 2222,
+									name: "VariableDeclaration",
+									src: "1438:14:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										indexed: false,
+										name: "amount0Out",
+										scope: 2230,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2223,
+											name: "ElementaryTypeName",
+											src: "1462:4:9"
+										}
+									],
+									id: 2224,
+									name: "VariableDeclaration",
+									src: "1462:15:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										indexed: false,
+										name: "amount1Out",
+										scope: 2230,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2225,
+											name: "ElementaryTypeName",
+											src: "1487:4:9"
+										}
+									],
+									id: 2226,
+									name: "VariableDeclaration",
+									src: "1487:15:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										indexed: true,
+										name: "to",
+										scope: 2230,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2227,
+											name: "ElementaryTypeName",
+											src: "1512:7:9"
+										}
+									],
+									id: 2228,
+									name: "VariableDeclaration",
+									src: "1512:18:9"
+								}
+							],
+							id: 2229,
+							name: "ParameterList",
+							src: "1372:164:9"
+						}
+					],
+					id: 2230,
+					name: "EventDefinition",
+					src: "1362:175:9"
+				},
+				{
+					attributes: {
+						anonymous: false,
+						documentation: null,
+						name: "Sync"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										indexed: false,
+										name: "reserve0",
+										scope: 2236,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint112",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint112",
+												type: "uint112"
+											},
+											id: 2231,
+											name: "ElementaryTypeName",
+											src: "1553:7:9"
+										}
+									],
+									id: 2232,
+									name: "VariableDeclaration",
+									src: "1553:16:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										indexed: false,
+										name: "reserve1",
+										scope: 2236,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint112",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint112",
+												type: "uint112"
+											},
+											id: 2233,
+											name: "ElementaryTypeName",
+											src: "1571:7:9"
+										}
+									],
+									id: 2234,
+									name: "VariableDeclaration",
+									src: "1571:16:9"
+								}
+							],
+							id: 2235,
+							name: "ParameterList",
+							src: "1552:36:9"
+						}
+					],
+					id: 2236,
+					name: "EventDefinition",
+					src: "1542:47:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "MINIMUM_LIQUIDITY",
+						scope: 2332,
+						stateMutability: "pure",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2237,
+							name: "ParameterList",
+							src: "1621:2:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2241,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2238,
+											name: "ElementaryTypeName",
+											src: "1647:4:9"
+										}
+									],
+									id: 2239,
+									name: "VariableDeclaration",
+									src: "1647:4:9"
+								}
+							],
+							id: 2240,
+							name: "ParameterList",
+							src: "1646:6:9"
+						}
+					],
+					id: 2241,
+					name: "FunctionDefinition",
+					src: "1595:58:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "factory",
+						scope: 2332,
+						stateMutability: "view",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2242,
+							name: "ParameterList",
+							src: "1674:2:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2246,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2243,
+											name: "ElementaryTypeName",
+											src: "1700:7:9"
+										}
+									],
+									id: 2244,
+									name: "VariableDeclaration",
+									src: "1700:7:9"
+								}
+							],
+							id: 2245,
+							name: "ParameterList",
+							src: "1699:9:9"
+						}
+					],
+					id: 2246,
+					name: "FunctionDefinition",
+					src: "1658:51:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "token0",
+						scope: 2332,
+						stateMutability: "view",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2247,
+							name: "ParameterList",
+							src: "1729:2:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2251,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2248,
+											name: "ElementaryTypeName",
+											src: "1755:7:9"
+										}
+									],
+									id: 2249,
+									name: "VariableDeclaration",
+									src: "1755:7:9"
+								}
+							],
+							id: 2250,
+							name: "ParameterList",
+							src: "1754:9:9"
+						}
+					],
+					id: 2251,
+					name: "FunctionDefinition",
+					src: "1714:50:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "token1",
+						scope: 2332,
+						stateMutability: "view",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2252,
+							name: "ParameterList",
+							src: "1784:2:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2256,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2253,
+											name: "ElementaryTypeName",
+											src: "1810:7:9"
+										}
+									],
+									id: 2254,
+									name: "VariableDeclaration",
+									src: "1810:7:9"
+								}
+							],
+							id: 2255,
+							name: "ParameterList",
+							src: "1809:9:9"
+						}
+					],
+					id: 2256,
+					name: "FunctionDefinition",
+					src: "1769:50:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "getReserves",
+						scope: 2332,
+						stateMutability: "view",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2257,
+							name: "ParameterList",
+							src: "1844:2:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "reserve0",
+										scope: 2265,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint112",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint112",
+												type: "uint112"
+											},
+											id: 2258,
+											name: "ElementaryTypeName",
+											src: "1870:7:9"
+										}
+									],
+									id: 2259,
+									name: "VariableDeclaration",
+									src: "1870:16:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "reserve1",
+										scope: 2265,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint112",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint112",
+												type: "uint112"
+											},
+											id: 2260,
+											name: "ElementaryTypeName",
+											src: "1888:7:9"
+										}
+									],
+									id: 2261,
+									name: "VariableDeclaration",
+									src: "1888:16:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "blockTimestampLast",
+										scope: 2265,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint32",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint32",
+												type: "uint32"
+											},
+											id: 2262,
+											name: "ElementaryTypeName",
+											src: "1906:6:9"
+										}
+									],
+									id: 2263,
+									name: "VariableDeclaration",
+									src: "1906:25:9"
+								}
+							],
+							id: 2264,
+							name: "ParameterList",
+							src: "1869:63:9"
+						}
+					],
+					id: 2265,
+					name: "FunctionDefinition",
+					src: "1824:109:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "price0CumulativeLast",
+						scope: 2332,
+						stateMutability: "view",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2266,
+							name: "ParameterList",
+							src: "1967:2:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2270,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2267,
+											name: "ElementaryTypeName",
+											src: "1993:4:9"
+										}
+									],
+									id: 2268,
+									name: "VariableDeclaration",
+									src: "1993:4:9"
+								}
+							],
+							id: 2269,
+							name: "ParameterList",
+							src: "1992:6:9"
+						}
+					],
+					id: 2270,
+					name: "FunctionDefinition",
+					src: "1938:61:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "price1CumulativeLast",
+						scope: 2332,
+						stateMutability: "view",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2271,
+							name: "ParameterList",
+							src: "2033:2:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2275,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2272,
+											name: "ElementaryTypeName",
+											src: "2059:4:9"
+										}
+									],
+									id: 2273,
+									name: "VariableDeclaration",
+									src: "2059:4:9"
+								}
+							],
+							id: 2274,
+							name: "ParameterList",
+							src: "2058:6:9"
+						}
+					],
+					id: 2275,
+					name: "FunctionDefinition",
+					src: "2004:61:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "kLast",
+						scope: 2332,
+						stateMutability: "view",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2276,
+							name: "ParameterList",
+							src: "2084:2:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2280,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2277,
+											name: "ElementaryTypeName",
+											src: "2110:4:9"
+										}
+									],
+									id: 2278,
+									name: "VariableDeclaration",
+									src: "2110:4:9"
+								}
+							],
+							id: 2279,
+							name: "ParameterList",
+							src: "2109:6:9"
+						}
+					],
+					id: 2280,
+					name: "FunctionDefinition",
+					src: "2070:46:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "mint",
+						scope: 2332,
+						stateMutability: "nonpayable",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "to",
+										scope: 2287,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2281,
+											name: "ElementaryTypeName",
+											src: "2136:7:9"
+										}
+									],
+									id: 2282,
+									name: "VariableDeclaration",
+									src: "2136:10:9"
+								}
+							],
+							id: 2283,
+							name: "ParameterList",
+							src: "2135:12:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "liquidity",
+										scope: 2287,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2284,
+											name: "ElementaryTypeName",
+											src: "2166:4:9"
+										}
+									],
+									id: 2285,
+									name: "VariableDeclaration",
+									src: "2166:14:9"
+								}
+							],
+							id: 2286,
+							name: "ParameterList",
+							src: "2165:16:9"
+						}
+					],
+					id: 2287,
+					name: "FunctionDefinition",
+					src: "2122:60:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "burn",
+						scope: 2332,
+						stateMutability: "nonpayable",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "to",
+										scope: 2296,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2288,
+											name: "ElementaryTypeName",
+											src: "2201:7:9"
+										}
+									],
+									id: 2289,
+									name: "VariableDeclaration",
+									src: "2201:10:9"
+								}
+							],
+							id: 2290,
+							name: "ParameterList",
+							src: "2200:12:9"
+						},
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "amount0",
+										scope: 2296,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2291,
+											name: "ElementaryTypeName",
+											src: "2231:4:9"
+										}
+									],
+									id: 2292,
+									name: "VariableDeclaration",
+									src: "2231:12:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "amount1",
+										scope: 2296,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2293,
+											name: "ElementaryTypeName",
+											src: "2245:4:9"
+										}
+									],
+									id: 2294,
+									name: "VariableDeclaration",
+									src: "2245:12:9"
+								}
+							],
+							id: 2295,
+							name: "ParameterList",
+							src: "2230:28:9"
+						}
+					],
+					id: 2296,
+					name: "FunctionDefinition",
+					src: "2187:72:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "swap",
+						scope: 2332,
+						stateMutability: "nonpayable",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "amount0Out",
+										scope: 2311,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2297,
+											name: "ElementaryTypeName",
+											src: "2278:4:9"
+										}
+									],
+									id: 2298,
+									name: "VariableDeclaration",
+									src: "2278:15:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "amount1Out",
+										scope: 2311,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2299,
+											name: "ElementaryTypeName",
+											src: "2295:4:9"
+										}
+									],
+									id: 2300,
+									name: "VariableDeclaration",
+									src: "2295:15:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "amount0Fee",
+										scope: 2311,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2301,
+											name: "ElementaryTypeName",
+											src: "2312:4:9"
+										}
+									],
+									id: 2302,
+									name: "VariableDeclaration",
+									src: "2312:15:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "amount1Fee",
+										scope: 2311,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "uint256",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "uint",
+												type: "uint256"
+											},
+											id: 2303,
+											name: "ElementaryTypeName",
+											src: "2329:4:9"
+										}
+									],
+									id: 2304,
+									name: "VariableDeclaration",
+									src: "2329:15:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "to",
+										scope: 2311,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2305,
+											name: "ElementaryTypeName",
+											src: "2346:7:9"
+										}
+									],
+									id: 2306,
+									name: "VariableDeclaration",
+									src: "2346:10:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "data",
+										scope: 2311,
+										stateVariable: false,
+										storageLocation: "calldata",
+										type: "bytes",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "bytes",
+												type: "bytes"
+											},
+											id: 2307,
+											name: "ElementaryTypeName",
+											src: "2358:5:9"
+										}
+									],
+									id: 2308,
+									name: "VariableDeclaration",
+									src: "2358:19:9"
+								}
+							],
+							id: 2309,
+							name: "ParameterList",
+							src: "2277:101:9"
+						},
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2310,
+							name: "ParameterList",
+							src: "2387:0:9"
+						}
+					],
+					id: 2311,
+					name: "FunctionDefinition",
+					src: "2264:124:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "skim",
+						scope: 2332,
+						stateMutability: "nonpayable",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "to",
+										scope: 2316,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2312,
+											name: "ElementaryTypeName",
+											src: "2407:7:9"
+										}
+									],
+									id: 2313,
+									name: "VariableDeclaration",
+									src: "2407:10:9"
+								}
+							],
+							id: 2314,
+							name: "ParameterList",
+							src: "2406:12:9"
+						},
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2315,
+							name: "ParameterList",
+							src: "2427:0:9"
+						}
+					],
+					id: 2316,
+					name: "FunctionDefinition",
+					src: "2393:35:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "sync",
+						scope: 2332,
+						stateMutability: "nonpayable",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2317,
+							name: "ParameterList",
+							src: "2446:2:9"
+						},
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2318,
+							name: "ParameterList",
+							src: "2457:0:9"
+						}
+					],
+					id: 2319,
+					name: "FunctionDefinition",
+					src: "2433:25:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "initialize",
+						scope: 2332,
+						stateMutability: "nonpayable",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2326,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2320,
+											name: "ElementaryTypeName",
+											src: "2484:7:9"
+										}
+									],
+									id: 2321,
+									name: "VariableDeclaration",
+									src: "2484:7:9"
+								},
+								{
+									attributes: {
+										constant: false,
+										name: "",
+										scope: 2326,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2322,
+											name: "ElementaryTypeName",
+											src: "2493:7:9"
+										}
+									],
+									id: 2323,
+									name: "VariableDeclaration",
+									src: "2493:7:9"
+								}
+							],
+							id: 2324,
+							name: "ParameterList",
+							src: "2483:18:9"
+						},
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2325,
+							name: "ParameterList",
+							src: "2510:0:9"
+						}
+					],
+					id: 2326,
+					name: "FunctionDefinition",
+					src: "2464:47:9"
+				},
+				{
+					attributes: {
+						body: null,
+						documentation: null,
+						implemented: false,
+						isConstructor: false,
+						kind: "function",
+						modifiers: [
+							null
+						],
+						name: "setBaseToken",
+						scope: 2332,
+						stateMutability: "nonpayable",
+						superFunction: null,
+						visibility: "external"
+					},
+					children: [
+						{
+							children: [
+								{
+									attributes: {
+										constant: false,
+										name: "_baseToken",
+										scope: 2331,
+										stateVariable: false,
+										storageLocation: "default",
+										type: "address",
+										value: null,
+										visibility: "internal"
+									},
+									children: [
+										{
+											attributes: {
+												name: "address",
+												stateMutability: "nonpayable",
+												type: "address"
+											},
+											id: 2327,
+											name: "ElementaryTypeName",
+											src: "2538:7:9"
+										}
+									],
+									id: 2328,
+									name: "VariableDeclaration",
+									src: "2538:18:9"
+								}
+							],
+							id: 2329,
+							name: "ParameterList",
+							src: "2537:20:9"
+						},
+						{
+							attributes: {
+								parameters: [
+									null
+								]
+							},
+							children: [
+							],
+							id: 2330,
+							name: "ParameterList",
+							src: "2566:0:9"
+						}
+					],
+					id: 2331,
+					name: "FunctionDefinition",
+					src: "2516:51:9"
 				}
 			],
-			id: 2189,
+			id: 2332,
 			name: "ContractDefinition",
-			src: "26:2396:8"
+			src: "26:2543:9"
 		}
 	],
-	id: 2190,
+	id: 2333,
 	name: "SourceUnit",
-	src: "0:2423:8"
+	src: "0:2570:9"
 };
 var compiler = {
 	name: "solc",
@@ -8273,8 +8681,8 @@ var compiler = {
 };
 var networks = {
 };
-var schemaVersion = "3.4.2";
-var updatedAt = "2021-08-14T11:27:34.742Z";
+var schemaVersion = "3.4.3";
+var updatedAt = "2022-01-26T12:29:39.101Z";
 var devdoc = {
 	methods: {
 	}
@@ -8286,10 +8694,13 @@ var userdoc = {
 var IPYESwapPair = {
 	contractName: contractName,
 	abi: abi,
+	metadata: metadata,
 	bytecode: bytecode,
 	deployedBytecode: deployedBytecode,
 	sourceMap: sourceMap,
 	deployedSourceMap: deployedSourceMap,
+	source: source,
+	sourcePath: sourcePath,
 	ast: ast,
 	legacyAST: legacyAST,
 	compiler: compiler,
@@ -8399,8 +8810,10 @@ var Fetcher = /*#__PURE__*/function () {
       return Promise.resolve(new contracts.Contract(address, IPYESwapPair.abi, provider).getReserves()).then(function (_ref) {
         var reserves0 = _ref[0],
             reserves1 = _ref[1];
-        var balances = tokenA.sortsBefore(tokenB) ? [reserves0, reserves1] : [reserves1, reserves0];
-        return new Pair(new TokenAmount(tokenA, balances[0]), new TokenAmount(tokenB, balances[1]));
+        return Promise.resolve(new contracts.Contract(address, IPYESwapPair.abi, provider).baseToken()).then(function (baseToken) {
+          var balances = tokenA.sortsBefore(tokenB) ? [reserves0, reserves1] : [reserves1, reserves0];
+          return new Pair(new TokenAmount(tokenA, balances[0]), new TokenAmount(tokenB, balances[1]), baseToken);
+        });
       });
     } catch (e) {
       return Promise.reject(e);

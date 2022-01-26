@@ -7,7 +7,8 @@ import { getCreate2Address } from '@ethersproject/address'
 
 import {
   _10000,
-  _9950,
+  _9975,
+  _8575,
   BigintIsh,
   ChainId,
   FACTORY_ADDRESS,
@@ -15,7 +16,8 @@ import {
   INIT_CODE_HASH,
   MINIMUM_LIQUIDITY,
   ZERO,
-  ONE
+  ONE,
+  ZERO_ADDRESS
 } from '../constants'
 import { sqrt, parseBigintIsh } from '../utils'
 import { InsufficientReservesError, InsufficientInputAmountError } from '../errors'
@@ -25,6 +27,7 @@ let PAIR_ADDRESS_CACHE: { [token0Address: string]: { [token1Address: string]: st
 
 export class Pair {
   public readonly liquidityToken: Token
+  public readonly baseToken: string
   private readonly tokenAmounts: [TokenAmount, TokenAmount]
 
   public static getAddress(tokenA: Token, tokenB: Token, chainId: ChainId = ChainId.TESTNET): string {
@@ -48,7 +51,7 @@ export class Pair {
     return PAIR_ADDRESS_CACHE[tokens[0].address][tokens[1].address]
   }
 
-  public constructor(tokenAmountA: TokenAmount, tokenAmountB: TokenAmount) {
+  public constructor(tokenAmountA: TokenAmount, tokenAmountB: TokenAmount, baseToken: string = tokenAmountB.token.address) {
     const tokenAmounts = tokenAmountA.token.sortsBefore(tokenAmountB.token) // does safety checks
       ? [tokenAmountA, tokenAmountB]
       : [tokenAmountB, tokenAmountA]
@@ -56,9 +59,10 @@ export class Pair {
       tokenAmounts[0].token.chainId,
       Pair.getAddress(tokenAmounts[0].token, tokenAmounts[1].token, tokenAmounts[0].token.chainId),
       18,
-      'SFG',
-      'Safegram-Swap'
+      'PYE-LP',
+      'PYESwap-LP'
     )
+    this.baseToken = baseToken
     this.tokenAmounts = tokenAmounts as [TokenAmount, TokenAmount]
   }
 
@@ -126,9 +130,10 @@ export class Pair {
     if (JSBI.equal(this.reserve0.raw, ZERO) || JSBI.equal(this.reserve1.raw, ZERO)) {
       throw new InsufficientReservesError()
     }
+    const fee = this.baseToken === ZERO_ADDRESS ? _9975 : _8575;
     const inputReserve = this.reserveOf(inputAmount.token)
     const outputReserve = this.reserveOf(inputAmount.token.equals(this.token0) ? this.token1 : this.token0)
-    const inputAmountWithFee = JSBI.multiply(inputAmount.raw, _9950)
+    const inputAmountWithFee = JSBI.multiply(inputAmount.raw, fee)
     const numerator = JSBI.multiply(inputAmountWithFee, outputReserve.raw)
     const denominator = JSBI.add(JSBI.multiply(inputReserve.raw, _10000), inputAmountWithFee)
     const outputAmount = new TokenAmount(
@@ -138,7 +143,7 @@ export class Pair {
     if (JSBI.equal(outputAmount.raw, ZERO)) {
       throw new InsufficientInputAmountError()
     }
-    return [outputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount))]
+    return [outputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount), this.baseToken)]
   }
 
   public getInputAmount(outputAmount: TokenAmount): [TokenAmount, Pair] {
@@ -151,15 +156,16 @@ export class Pair {
       throw new InsufficientReservesError()
     }
 
+    const fee = this.baseToken === ZERO_ADDRESS ? _9975 : _8575;
     const outputReserve = this.reserveOf(outputAmount.token)
     const inputReserve = this.reserveOf(outputAmount.token.equals(this.token0) ? this.token1 : this.token0)
     const numerator = JSBI.multiply(JSBI.multiply(inputReserve.raw, outputAmount.raw), _10000)
-    const denominator = JSBI.multiply(JSBI.subtract(outputReserve.raw, outputAmount.raw), _9950)
+    const denominator = JSBI.multiply(JSBI.subtract(outputReserve.raw, outputAmount.raw), fee)
     const inputAmount = new TokenAmount(
       outputAmount.token.equals(this.token0) ? this.token1 : this.token0,
       JSBI.add(JSBI.divide(numerator, denominator), ONE)
     )
-    return [inputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount))]
+    return [inputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount), this.baseToken)]
   }
 
   public getLiquidityMinted(
