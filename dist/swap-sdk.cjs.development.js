@@ -8809,11 +8809,10 @@ var Fetcher = /*#__PURE__*/function () {
       var address = Pair.getAddress(tokenA, tokenB, tokenA.chainId);
       return Promise.resolve(new contracts.Contract(address, IPYESwapPair.abi, provider).getReserves()).then(function (_ref) {
         var reserves0 = _ref[0],
-            reserves1 = _ref[1];
-        return Promise.resolve(new contracts.Contract(address, IPYESwapPair.abi, provider).baseToken()).then(function (baseToken) {
-          var balances = tokenA.sortsBefore(tokenB) ? [reserves0, reserves1] : [reserves1, reserves0];
-          return new Pair(new TokenAmount(tokenA, balances[0]), new TokenAmount(tokenB, balances[1]), baseToken);
-        });
+            reserves1 = _ref[1],
+            baseToken = _ref[3];
+        var balances = tokenA.sortsBefore(tokenB) ? [reserves0, reserves1] : [reserves1, reserves0];
+        return new Pair(new TokenAmount(tokenA, balances[0]), new TokenAmount(tokenB, balances[1]), baseToken);
       });
     } catch (e) {
       return Promise.reject(e);
