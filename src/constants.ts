@@ -29,7 +29,7 @@ export const FACTORY_ADDRESS: ChainAddress = {
 
 export const INIT_CODE_HASH: ChainAddress = {
   [ChainId.MAINNET]: "0xd0d4c4cd0848c93cb4fd1f498d7013ee6bfb25783ea21593d5834f5d250ece66",
-  [ChainId.TESTNET]: '0x80b1c56265ffa73d3e592dbcdf04e0da83be71ccdc5100b1bd15b44cee3a9a2b'
+  [ChainId.TESTNET]: '0x7e4b8858964794f2e94b38733da0eb2df79b375b3e042ea15c8c902a54933506'
 }
 
 export const MINIMUM_LIQUIDITY = JSBI.BigInt(1000)
