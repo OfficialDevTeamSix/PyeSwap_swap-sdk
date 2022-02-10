@@ -762,7 +762,7 @@ var Pair = /*#__PURE__*/function () {
     }
 
     if (totalFee === void 0) {
-      totalFee = 0;
+      totalFee = 1400;
     }
 
     var tokenAmounts = tokenAmountA.token.sortsBefore(tokenAmountB.token) // does safety checks
