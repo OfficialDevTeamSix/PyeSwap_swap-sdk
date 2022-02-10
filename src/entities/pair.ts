@@ -52,7 +52,7 @@ export class Pair {
     return PAIR_ADDRESS_CACHE[tokens[0].address][tokens[1].address]
   }
 
-  public constructor(tokenAmountA: TokenAmount, tokenAmountB: TokenAmount, baseToken: string = tokenAmountB.token.address, totalFee = 1400) {
+  public constructor(tokenAmountA: TokenAmount, tokenAmountB: TokenAmount, baseToken: string = ZERO_ADDRESS, totalFee = 1400) {
     const tokenAmounts = tokenAmountA.token.sortsBefore(tokenAmountB.token) // does safety checks
       ? [tokenAmountA, tokenAmountB]
       : [tokenAmountB, tokenAmountA]
@@ -64,7 +64,7 @@ export class Pair {
       'PYESwap-LP'
     )
     this.baseToken = baseToken
-    this.totalFee = JSBI.BigInt(totalFee)
+    this.totalFee = !baseToken || baseToken === ZERO_ADDRESS ? JSBI.BigInt("0") : JSBI.BigInt(totalFee)
     this.tokenAmounts = tokenAmounts as [TokenAmount, TokenAmount]
   }
 
