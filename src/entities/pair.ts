@@ -28,6 +28,7 @@ let PAIR_ADDRESS_CACHE: { [token0Address: string]: { [token1Address: string]: st
 export class Pair {
   public readonly liquidityToken: Token
   public readonly baseToken: string
+  public readonly totalFee: JSBI
   private readonly tokenAmounts: [TokenAmount, TokenAmount]
 
   public static getAddress(tokenA: Token, tokenB: Token, chainId: ChainId = ChainId.TESTNET): string {
@@ -39,7 +40,7 @@ export class Pair {
         [tokens[0].address]: {
           ...PAIR_ADDRESS_CACHE?.[tokens[0].address],
           [tokens[1].address]: getCreate2Address(
-              // @ts-ignore
+            // @ts-ignore
             FACTORY_ADDRESS[chainId || tokenA.chainId],
             keccak256(['bytes'], [pack(['address', 'address'], [tokens[0].address, tokens[1].address])]),
             INIT_CODE_HASH[chainId || tokenA.chainId]
@@ -51,7 +52,7 @@ export class Pair {
     return PAIR_ADDRESS_CACHE[tokens[0].address][tokens[1].address]
   }
 
-  public constructor(tokenAmountA: TokenAmount, tokenAmountB: TokenAmount, baseToken: string = tokenAmountB.token.address) {
+  public constructor(tokenAmountA: TokenAmount, tokenAmountB: TokenAmount, baseToken: string = tokenAmountB.token.address, totalFee = 1400) {
     const tokenAmounts = tokenAmountA.token.sortsBefore(tokenAmountB.token) // does safety checks
       ? [tokenAmountA, tokenAmountB]
       : [tokenAmountB, tokenAmountA]
@@ -63,6 +64,7 @@ export class Pair {
       'PYESwap-LP'
     )
     this.baseToken = baseToken
+    this.totalFee = JSBI.BigInt(totalFee)
     this.tokenAmounts = tokenAmounts as [TokenAmount, TokenAmount]
   }
 
@@ -130,7 +132,7 @@ export class Pair {
     if (JSBI.equal(this.reserve0.raw, ZERO) || JSBI.equal(this.reserve1.raw, ZERO)) {
       throw new InsufficientReservesError()
     }
-    const fee = this.baseToken === ZERO_ADDRESS ? _9975 : _8575;
+    const fee = this.baseToken === ZERO_ADDRESS ? _9975 : JSBI.subtract(_9975, this.totalFee);
     const inputReserve = this.reserveOf(inputAmount.token)
     const outputReserve = this.reserveOf(inputAmount.token.equals(this.token0) ? this.token1 : this.token0)
     const inputAmountWithFee = JSBI.multiply(inputAmount.raw, fee)
@@ -156,7 +158,7 @@ export class Pair {
       throw new InsufficientReservesError()
     }
 
-    const fee = this.baseToken === ZERO_ADDRESS ? _9975 : _8575;
+    const fee = this.baseToken === ZERO_ADDRESS ? _9975 : JSBI.subtract(_9975, this.totalFee);
     const outputReserve = this.reserveOf(outputAmount.token)
     const inputReserve = this.reserveOf(outputAmount.token.equals(this.token0) ? this.token1 : this.token0)
     const numerator = JSBI.multiply(JSBI.multiply(inputReserve.raw, outputAmount.raw), _10000)

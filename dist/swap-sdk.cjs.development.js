@@ -46,7 +46,6 @@ var FIVE = /*#__PURE__*/JSBI.BigInt(5);
 var TEN = /*#__PURE__*/JSBI.BigInt(10);
 var _100 = /*#__PURE__*/JSBI.BigInt(100);
 var _9975 = /*#__PURE__*/JSBI.BigInt(9975);
-var _8575 = /*#__PURE__*/JSBI.BigInt(8575);
 var _10000 = /*#__PURE__*/JSBI.BigInt(10000);
 var ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 var SolidityType;
@@ -757,15 +756,20 @@ var Price = /*#__PURE__*/function (_Fraction) {
 
 var PAIR_ADDRESS_CACHE = {};
 var Pair = /*#__PURE__*/function () {
-  function Pair(tokenAmountA, tokenAmountB, baseToken) {
+  function Pair(tokenAmountA, tokenAmountB, baseToken, totalFee) {
     if (baseToken === void 0) {
       baseToken = tokenAmountB.token.address;
+    }
+
+    if (totalFee === void 0) {
+      totalFee = 1400;
     }
 
     var tokenAmounts = tokenAmountA.token.sortsBefore(tokenAmountB.token) // does safety checks
     ? [tokenAmountA, tokenAmountB] : [tokenAmountB, tokenAmountA];
     this.liquidityToken = new Token(tokenAmounts[0].token.chainId, Pair.getAddress(tokenAmounts[0].token, tokenAmounts[1].token, tokenAmounts[0].token.chainId), 18, 'PYE-LP', 'PYESwap-LP');
     this.baseToken = baseToken;
+    this.totalFee = JSBI.BigInt(totalFee);
     this.tokenAmounts = tokenAmounts;
   }
 
@@ -828,7 +832,7 @@ var Pair = /*#__PURE__*/function () {
       throw new InsufficientReservesError();
     }
 
-    var fee = this.baseToken === ZERO_ADDRESS ? _9975 : _8575;
+    var fee = this.baseToken === ZERO_ADDRESS ? _9975 : JSBI.subtract(_9975, this.totalFee);
     var inputReserve = this.reserveOf(inputAmount.token);
     var outputReserve = this.reserveOf(inputAmount.token.equals(this.token0) ? this.token1 : this.token0);
     var inputAmountWithFee = JSBI.multiply(inputAmount.raw, fee);
@@ -850,7 +854,7 @@ var Pair = /*#__PURE__*/function () {
       throw new InsufficientReservesError();
     }
 
-    var fee = this.baseToken === ZERO_ADDRESS ? _9975 : _8575;
+    var fee = this.baseToken === ZERO_ADDRESS ? _9975 : JSBI.subtract(_9975, this.totalFee);
     var outputReserve = this.reserveOf(outputAmount.token);
     var inputReserve = this.reserveOf(outputAmount.token.equals(this.token0) ? this.token1 : this.token0);
     var numerator = JSBI.multiply(JSBI.multiply(inputReserve.raw, outputAmount.raw), _10000);
