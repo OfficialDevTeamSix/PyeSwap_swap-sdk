@@ -34,8 +34,8 @@ var _FACTORY_ADDRESS, _INIT_CODE_HASH, _SOLIDITY_TYPE_MAXIMA;
   Rounding[Rounding["ROUND_UP"] = 2] = "ROUND_UP";
 })(exports.Rounding || (exports.Rounding = {}));
 
-var FACTORY_ADDRESS = (_FACTORY_ADDRESS = {}, _FACTORY_ADDRESS[exports.ChainId.MAINNET] = "0x08AAC2466315b3CDF6315D197E4B48CAc1e06307", _FACTORY_ADDRESS[exports.ChainId.TESTNET] = "0x08AAC2466315b3CDF6315D197E4B48CAc1e06307", _FACTORY_ADDRESS);
-var INIT_CODE_HASH = (_INIT_CODE_HASH = {}, _INIT_CODE_HASH[exports.ChainId.MAINNET] = "0xf2e0bb798902c59bb23b996e4c2b7f913c426e5cbe65fb75a11b085dc11fd57e", _INIT_CODE_HASH[exports.ChainId.TESTNET] = '0xf2e0bb798902c59bb23b996e4c2b7f913c426e5cbe65fb75a11b085dc11fd57e', _INIT_CODE_HASH);
+var FACTORY_ADDRESS = (_FACTORY_ADDRESS = {}, _FACTORY_ADDRESS[exports.ChainId.MAINNET] = "0x40903aB5c9591699BD3d4d312A9e1156b639dc66", _FACTORY_ADDRESS[exports.ChainId.TESTNET] = "0x40903aB5c9591699BD3d4d312A9e1156b639dc66", _FACTORY_ADDRESS);
+var INIT_CODE_HASH = (_INIT_CODE_HASH = {}, _INIT_CODE_HASH[exports.ChainId.MAINNET] = "0xe6e48e4c736f4d1f6e323f385b468dfb45bd0518559c5d06633053f0fd401765", _INIT_CODE_HASH[exports.ChainId.TESTNET] = '0xe6e48e4c736f4d1f6e323f385b468dfb45bd0518559c5d06633053f0fd401765', _INIT_CODE_HASH);
 var MINIMUM_LIQUIDITY = /*#__PURE__*/JSBI.BigInt(1000); // exports for internal consumption
 
 var ZERO = /*#__PURE__*/JSBI.BigInt(0);
@@ -758,7 +758,7 @@ var PAIR_ADDRESS_CACHE = {};
 var Pair = /*#__PURE__*/function () {
   function Pair(tokenAmountA, tokenAmountB, baseToken, totalFee) {
     if (baseToken === void 0) {
-      baseToken = tokenAmountB.token.address;
+      baseToken = ZERO_ADDRESS;
     }
 
     if (totalFee === void 0) {
@@ -769,7 +769,7 @@ var Pair = /*#__PURE__*/function () {
     ? [tokenAmountA, tokenAmountB] : [tokenAmountB, tokenAmountA];
     this.liquidityToken = new Token(tokenAmounts[0].token.chainId, Pair.getAddress(tokenAmounts[0].token, tokenAmounts[1].token, tokenAmounts[0].token.chainId), 18, 'PYE-LP', 'PYESwap-LP');
     this.baseToken = baseToken;
-    this.totalFee = JSBI.BigInt(totalFee);
+    this.totalFee = !baseToken || baseToken === ZERO_ADDRESS ? JSBI.BigInt("0") : JSBI.BigInt(totalFee);
     this.tokenAmounts = tokenAmounts;
   }
 
