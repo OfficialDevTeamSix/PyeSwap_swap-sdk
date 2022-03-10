@@ -23,13 +23,13 @@ type ChainAddress = {
   [chainId in ChainId]: string
 }
 export const FACTORY_ADDRESS: ChainAddress = {
-  [ChainId.MAINNET]: "0x40903aB5c9591699BD3d4d312A9e1156b639dc66",
-  [ChainId.TESTNET]: "0x40903aB5c9591699BD3d4d312A9e1156b639dc66"
+  [ChainId.MAINNET]: "0x96A3CbC01DFe417813258Feb50E2FdF3e2eF55F9",
+  [ChainId.TESTNET]: "0x96A3CbC01DFe417813258Feb50E2FdF3e2eF55F9"
 }
 
 export const INIT_CODE_HASH: ChainAddress = {
-  [ChainId.MAINNET]: "0xe6e48e4c736f4d1f6e323f385b468dfb45bd0518559c5d06633053f0fd401765",
-  [ChainId.TESTNET]: '0xe6e48e4c736f4d1f6e323f385b468dfb45bd0518559c5d06633053f0fd401765'
+  [ChainId.MAINNET]: "0xb814e798ef30dc84a7ca9472ecc9bc975aeadcf7d8a48b8babe8688b1a9eebcd",
+  [ChainId.TESTNET]: '0xb814e798ef30dc84a7ca9472ecc9bc975aeadcf7d8a48b8babe8688b1a9eebcd'
 }
 
 export const MINIMUM_LIQUIDITY = JSBI.BigInt(1000)
